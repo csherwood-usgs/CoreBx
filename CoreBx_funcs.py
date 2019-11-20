@@ -58,3 +58,25 @@ def map_stats(mp):
     print("nans",numn)
     print("size",num)
     return mean, mad
+
+def map_stats2d(mp):
+    '''
+    Calculate some basic statistics for 2D map arrays
+    '''
+    mean = np.nanmean(mp,axis=(0,1))
+    mad = np.nanmean(np.abs(mp),axis=(0,1))
+    dmin = np.nanmin(mp,axis=(0,1))
+    dmax = np.nanmax(mp,axis=(0,1))
+    rms = np.sqrt(np.nanmean(mp**2.,axis=(0,1)))
+    s = np.shape(mp)
+    num = (mp[:,:].size)
+    numn = (np.count_nonzero(np.isnan(mp[:,:])))
+    print("Shape: ",s)
+    print("mean",mean)
+    print("mad",mad)
+    print("min",dmin)
+    print("max",dmax)
+    print("rms",rms)
+    print("nans",numn)
+    print("size",num)
+    return mean, mad
