@@ -34,7 +34,7 @@ def box2UTMh(x, y, x0, y0, theta):
     yr = xyrh[1,:]
     return xr, yr
 
-def map_stats(mp):
+def map_stats(mp,sfile):
     '''
     Calculate some basic statistics for 3D map arrays
     '''
@@ -49,17 +49,17 @@ def map_stats(mp):
     for i in range(s[0]):
        num.append(mp[i,:,:].size)
        numn.append(np.count_nonzero(np.isnan(mp[i,:,:])))
-    print("Shape: ",s)
-    print("mean",mean)
-    print("mad",mad)
-    print("min",dmin)
-    print("max",dmax)
-    print("rms",rms)
-    print("nans",numn)
-    print("size",num)
+    print("Shape: ",s,file=sfile)
+    print("mean",mean,file=sfile)
+    print("mad",mad,file=sfile)
+    print("min",dmin,file=sfile)
+    print("max",dmax,file=sfile)
+    print("rms",rms,file=sfile)
+    print("nans",numn,file=sfile)
+    print("size",num,file=sfile)
     return mean, mad
 
-def map_stats2d(mp):
+def map_stats2d(mp,sfile):
     '''
     Calculate some basic statistics for 2D map arrays
     '''
@@ -71,12 +71,12 @@ def map_stats2d(mp):
     s = np.shape(mp)
     num = (mp[:,:].size)
     numn = (np.count_nonzero(np.isnan(mp[:,:])))
-    print("Shape: ",s)
-    print("mean",mean)
-    print("mad",mad)
-    print("min",dmin)
-    print("max",dmax)
-    print("rms",rms)
-    print("nans",numn)
-    print("size",num)
+    print("Shape: ",s,file=sfile)
+    print("mean",mean,file=sfile)
+    print("mad",mad,file=sfile)
+    print("min",dmin,file=sfile)
+    print("max",dmax,file=sfile)
+    print("rms",rms,file=sfile)
+    print("nans",numn,file=sfile)
+    print("size",num,file=sfile)
     return mean, mad
