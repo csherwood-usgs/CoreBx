@@ -1,6 +1,7 @@
 # plot_maps_vols.py
 ##############################################################################
 #  Plot map views
+
 tcmap=plt.cm.terrain
 tcmap.set_bad(color='darkgray')
 title_str = '{0:s}'.format(r['name'].capitalize())
@@ -68,8 +69,8 @@ plt.figure(figsize=(12,7))
 ax1=plt.subplot(211)
 plt.plot(dhi[0,:],color='dimgray',linewidth=3,label=dates[0])
 plt.plot(dhi[1,:],color='tab:red',linewidth=2,label=dates[1])
-plt.plot(dhi[2,:],color='tab:blue',linewidth=2,label=dates[2])
-plt.plot(dhi[3,:],color='tab:orange',linewidth=2,label=dates[3])
+plt.plot(dhi[2,:],color='tab:orange',linewidth=2,label=dates[2])
+plt.plot(dhi[3,:],color='tab:blue',linewidth=2,label=dates[3])
 
 plt.legend(loc='upper right')
 ax1.xaxis.set_ticklabels([])
@@ -82,15 +83,15 @@ plt.title(title_str)
 ax2=plt.subplot(212)
 plt.plot([0, nalong*dxdy],[m[0],m[0]],'--',color='dimgray',linewidth=1)
 plt.plot([0, nalong*dxdy],[m[1],m[1]],'--',color='tab:red',linewidth=1)
-plt.plot([0, nalong*dxdy],[m[2],m[2]],'--',color='tab:blue',linewidth=1)
-plt.plot([0, nalong*dxdy],[m[3],m[3]],'--',color='tab:orange',linewidth=1)
+plt.plot([0, nalong*dxdy],[m[2],m[2]],'--',color='tab:orange',linewidth=1)
+plt.plot([0, nalong*dxdy],[m[3],m[3]],'--',color='tab:blue',linewidth=1)
 lb = []
 for i in range(0,4):
     lb.append("{0} {1:4.0f} m$^3$".format(dates[i],m[i]))
 plt.plot(v[0,:],label=lb[0],color='dimgray',linewidth=3)
 plt.plot(v[1,:],label=lb[1],color='tab:red',linewidth=2)
-plt.plot(v[2,:],label=lb[2],color='tab:blue',linewidth=2)
-plt.plot(v[3,:],label=lb[3],color='tab:orange',linewidth=2)
+plt.plot(v[2,:],label=lb[2],color='tab:orange',linewidth=2)
+plt.plot(v[3,:],label=lb[3],color='tab:blue',linewidth=2)
 ax2.set_ylim(0,950)
 plt.xlabel(r'Alongshore Distance (m)')
 plt.ylabel(r'Volume (m$^3$/m)')
