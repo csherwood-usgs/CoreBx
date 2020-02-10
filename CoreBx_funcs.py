@@ -5,6 +5,11 @@ from scipy import interpolate, signal
 
 def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,iverbose=True,iplot=True,iprint=True):
     """
+    Calculate cross-sectional volumes for barrier island profiles above datum.
+    Assumes distance increases from offshore landward, but plots with ocean to right.
+
+    This is not designed to analyze datum below zero. To do that, fill values that are zeros here should
+    be reconsidered...maybe turned into datum.
     """
     # Colors from colorbrewer...but one more than needed so we can skip the first one (too light)
     cols=['#feedde','#fdbe85','#fd8d3c','#e6550d','#a63603']
@@ -23,7 +28,11 @@ def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,iverbose=T
     # find first good value
     ix = np.zeros((nmaps))
     for i in range(0,nmaps):
-        ix[i] = np.argwhere(np.isfinite(profs[i,:]))[0]
+        try:
+            ix[i] = np.argwhere(np.isfinite(profs[i,:]))[0]
+        except:
+            # fails because entire profile is NaN
+            ix[i] = 0
     if(iverbose):
         print('indices to first good value: ',ix)
 
@@ -47,14 +56,24 @@ def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,iverbose=T
         npts = int(5/dx)
         # fit a straight line to first 5 points
         for i in range((nmaps)):
-            p = np.polyfit( dist[int(ix[i]+1):int(ix[i]+1+npts)],\
-                profs[i,int(ix[i]+1):int(ix[i]+1+npts)],1)
-            if(p[0]>0.):
-                # if slope is positive, replace NaNs with line
-                profs[i,0:int(ix[i])]=np.polyval(p,dist[0:int(ix[i])])
-            else:
-                # if slope is not positive, replace NaNs with zeros
+            try:
+                # Not sure why one of these breaks down in
+                p = np.polyfit( dist[int(ix[i]+1):int(ix[i]+1+npts)],\
+                    profs[i,int(ix[i]+1):int(ix[i]+1+npts)],1)
+                if(p[0]>0.):
+                    # if slope is positive, replace NaNs with line
+                    profs[i,0:int(ix[i])]=np.polyval(p,dist[0:int(ix[i])])
+                else:
+                    # if slope is not positive, replace NaNs with zeros
+                    profs[i,0:int(ix[i])]=0.
+            except:
+                print('cant calculate slope')
+                print('dist, profs',dist[int(ix[i]+1):int(ix[i]+1+npts)],\
+                    profs[i,int(ix[i]+1):int(ix[i]+1+npts)])
+                # fill with zeros
                 profs[i,0:int(ix[i])]=0.
+
+
         # for i in range((nmaps)):
         #     print(np.sum(np.isnan(profs[i])))
     elif(imethod is 'clip'):
