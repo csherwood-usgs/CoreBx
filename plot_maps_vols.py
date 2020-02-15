@@ -102,6 +102,6 @@ plt.legend(loc='upper right')
 title_str = 'b) Volumes'
 
 plt.text(0.012*r['xlen'],.9*950,title_str)
-fig_name = "{}_{}_elevation_volume.svg".format(r['name'],holes[ihole])
-plt.savefig(fig_name,bbox_inches='tight', format='svg')
+fig_name = "{}_{}_elevation_volume.png".format(r['name'],holes[ihole])
+plt.savefig(fig_name,bbox_inches='tight', format='png',dpi=300)
 ##############################################################################

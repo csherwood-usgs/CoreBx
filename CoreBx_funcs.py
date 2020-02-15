@@ -118,8 +118,8 @@ def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,iverbose=T
         plt.xlabel('Across-shore Distance (m)')
         plt.title(title_str)
         if iprint:
-            pfn = 'p_'+title_str+'.svg'
-            plt.savefig(pfn)
+            pfn = 'p_'+title_str+'.png'
+            plt.savefig(pfn,format='png',dpi=300)
 
     return v, cxcy
 
