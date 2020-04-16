@@ -3,51 +3,64 @@ import matplotlib.pyplot as plt
 import xarray as xr
 from scipy import interpolate, signal
 
-def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,iverbose=True,iplot=True,iprint=True):
+def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,\
+    maxdist=400.,ztoe=2.1,zowp=1.25,nsmooth=51,iverbose=True,iplot=True,iprint=True):
     """
     Calculate cross-sectional volumes for barrier island profiles above datum.
     Assumes distance increases from offshore landward, but plots with ocean to right.
 
     This is not designed to analyze datum below zero. To do that, fill values that are zeros here should
     be reconsidered...maybe turned into datum.
+
+    Input (lp is length of profiles, nmaps is number of profiles):
+        dist(lP) - cross-shore distance (m), starting from arbitrary offshore location
+        profs(nmaps, lp) - multiple profiles elevations (m above some datum)
+        pfill(lp) - single profile used to fill gaps in other profiles (pre-storm profile)
+        title_str - string used for title in plots
+        pname - strings with names of profiles
+        imethod -"extend" or "clip" TODO: check clip values
+        datum - value used to calculate volumes
+        iverbose - "True" produces extra output
+        iplot - "True" produces plot
+        iprint - "True" saves plot
     """
     # Colors from colorbrewer...but one more than needed so we can skip the first one (too light)
     cols=['#feedde','#fdbe85','#fd8d3c','#e6550d','#a63603']
+
     dx = dist[1]-dist[0]
     nmaps, lp = np.shape(profs)
     if(iverbose):
         print('dx: ',dx)
         print("nmaps, length profiles: ",nmaps,lp)
-
+        print("Shape of dist: ",np.shape(dist))
+        print("Shape of profs: ",np.shape(profs))
+        print("Shape of pfill: ",np.shape(pfill))
     if(iverbose and iplot):
         fig = plt.figure(figsize=(5,3))
         plt.plot(dist,pfill,':r')
         for i in range(0,nmaps):
             plt.plot(dist,profs[i,:],'-',c=cols[i+1])
 
+    # make a copy of the unchanged profiles for plotting
+    profr = profs.copy()
+
+    # replace NaNs with fill values from September
+    for i in range((nmaps)):
+        # replace NaNs the fill values
+        idx = np.isnan(profs[i,:])
+        profs[i,idx]=pfill[idx]
+
     # find first good value
     ix = np.zeros((nmaps))
     for i in range(0,nmaps):
         try:
-            ix[i] = np.argwhere(np.isfinite(profs[i,:]))[0]
+            ix[i] = int(np.argwhere(np.isfinite(profs[i,:]))[0])
         except:
             # fails because entire profile is NaN
             ix[i] = 0
     if(iverbose):
-        print('indices to first good value: ',ix)
-
-    # make a copy of the unchanged profiles for plotting
-    profr = profs.copy()
-
-    # replace NaNs after this point with the fill values
-    for i in range((nmaps)):
-        # replace NaNs after first good value with the fill values
-        idx = np.isnan(profs[i,:])
-        profs[i,idx]=pfill[idx]
-        # replace any other NaNs with zero
-        profs[i,np.isnan(profs[i,:])]=0.
-        # restore values before first good value with NaNs
-        profs[i,:int(ix[i])]=np.nan
+        print('indices to first good value, value: ')
+        print(ix)
 
     if(imethod is 'extend' ):
         title_str = title_str+'_extended'
@@ -60,47 +73,129 @@ def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,iverbose=T
                 # Not sure why one of these breaks down in
                 p = np.polyfit( dist[int(ix[i]+1):int(ix[i]+1+npts)],\
                     profs[i,int(ix[i]+1):int(ix[i]+1+npts)],1)
-                if(p[0]>0.):
+                if iverbose:
+                    print("Slope is: {:.4f}".format(p[0]))
+                # if slope is less than 1:50, replace
+                if(p[0]>0.02):
                     # if slope is positive, replace NaNs with line
                     profs[i,0:int(ix[i])]=np.polyval(p,dist[0:int(ix[i])])
                 else:
                     # if slope is not positive, replace NaNs with zeros
                     profs[i,0:int(ix[i])]=0.
+
+                    # print("warning: replacing slope of {:.4f} with {:.4f}".format(p[0],0.02))
+                    # p[0]=0.02
+                    # profs[i,0:int(ix[i])]=np.polyval(p,dist[0:int(ix[i])])
             except:
-                print('cant calculate slope')
-                print('dist, profs',dist[int(ix[i]+1):int(ix[i]+1+npts)],\
-                    profs[i,int(ix[i]+1):int(ix[i]+1+npts)])
+                if iverbose:
+                    print('cant calculate slope')
+                    print('dist, profs',dist[int(ix[i]+1):int(ix[i]+1+npts)],\
+                        profs[i,int(ix[i]+1):int(ix[i]+1+npts)])
                 # fill with zeros
                 profs[i,0:int(ix[i])]=0.
 
-
-        # for i in range((nmaps)):
-        #     print(np.sum(np.isnan(profs[i])))
     elif(imethod is 'clip'):
         title_str = title_str+'_clip'
         if iverbose:
             print('clipped')
         imx = int(np.max(ix))
         profs[:,0:imx]=0.
-        # for i in range((nmaps)):
-        #     print(np.sum(np.isnan(profs[i])))
+
+    for i in range(0,nmaps):
+        # replace any other NaNs with zero
+        profs[i,np.isnan(profs[i,:])]=0.
+        # # restore values before first good value with NaNs
+        # profs[i,:int(ix[i])]=np.nan
+
+    # find highest point in first maxdist m
+    zmax = np.ones((nmaps))*np.nan
+    zmap0 = np.ones((nmaps))*np.nan
+    dmax = np.ones((nmaps))*np.nan
+    for i in range((nmaps)):
+        try:
+            imxh = np.nanargmax(profs[i,int(ix[i]):int(ix[i]+maxdist)])
+            if i == 0:
+                ix0 = int(ix[0]+imxh)
+            zmax[i] = profs[i,int(ix[i]+imxh)]
+            zmap0[i] = profs[i,ix0] # z at location os zmax in first map
+            dmax[i] = dist[int(ix[i]+imxh)]
+        except:
+            pass
+        if iverbose:
+            print("i, pmax, dmax",i, zmax[i], dmax[i])
+
+    # find dune toe as first point >= ztoe
+    dtoe = np.ones((nmaps))*np.nan
+    for i in range((nmaps)):
+        try:
+            # have to squeeze because where returns (0,n). Want first one, so [0]
+            idt = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=ztoe))[0]
+            dtoe[i] = dist[int(ix[i]+idt)]
+            if iverbose:
+                print("i, dtoe",i, dtoe[i])
+        except:
+            if iverbose:
+                print("i, dtoe",i, dtoe[i])
+
+    # find the back of the island using datum
+    disl = np.ones((nmaps))*np.nan
+    for i in range((nmaps)):
+        try:
+            # find last point >= datum
+            #iisl = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=datum))[-1]
+            iisl = np.squeeze(np.where(profs[i,int(ix[i]):-1]>=datum))[-1]
+            disl[i] = dist[int(ix[i]+iisl)]
+            if iverbose:
+                print("i, disl",i, disl[i])
+        except:
+            if iverbose:
+                print("i, disl",i, disl[i])
+
+    # find the back of the overwash platform using zowp
+    dowp = np.ones((nmaps))*np.nan
+    for i in range((nmaps)):
+        # smooth the profile
+        ps = smooth(np.squeeze(profs[i,:]),nsmooth)
+        # find last point >zowp
+        # iowp = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=zowp))[-1]
+        # iowp = np.squeeze(np.where(ps[int(ix[i]):int(ix[i]+maxdist)]>=zowp))[-1]
+        try:
+            iowp = np.squeeze(np.where(ps[int(ix[i]):-1]>=zowp))[-1]
+            dowp[i] = dist[int(ix[i]+iowp)]
+            if iverbose:
+                print("i, dowp",i, dowp[i])
+        except:
+            if iverbose:
+                print("i, dowp",i, dowp[i])
+    # if back of platforn is not found, use half the distance from the crest to the back of the island
+    if not np.isfinite(dowp[0]):
+        if np.isfinite(disl[0]):
+            dowp[0] = dmax[0]+0.5*(disl[0]-dmax[0])
+        else:
+            dowp[0] = dmax[0]
 
     # Calculate volumes
     profd = profs.copy()-datum
     profd[np.where(profd<=0.)]=0.
     v = np.sum(profd,1)*dx
+    vp = np.sum(profd[:,0:int(ix[i]+dowp[0])],1)*dx
     if iverbose:
-        print("Profile volumes: ", v)
+        print("Island volumes: ", v)
+        print('Platform volumes:', vp)
 
     # Calculate centroids
     cxcy = np.zeros((nmaps,2))
     profc = profs.copy()
     profc[np.where(profc<=datum)]=np.nan
     for i in range(0,nmaps):
-        cxcy[i,0],cxcy[i,1] = centroid(dist,profc[i,:])
+        try:
+            cxcy[i,0],cxcy[i,1] = centroid(dist,profc[i,:])
+        except:
+            cxcy[i,0],cxcy[i,1] = np.nan, np.nan
     if iverbose:
         print("Centroids: \n",cxcy)
 
+    # nice plot if requested
     if iplot:
         fig=plt.figure(figsize=(9,6))
         plt.plot(dist,np.ones_like(dist)*datum,'--',c='dimgray',linewidth=2)
@@ -111,6 +206,18 @@ def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,iverbose=T
         for i in range(0,4):
             plt.plot(cxcy[i,0],cxcy[i,1],'ok',ms=12)
             plt.plot(cxcy[i,0],cxcy[i,1],'o',c=cols[i])
+        for i in range(0,4):
+            plt.plot(dmax[i],zmax[i],'or',ms=12)
+            plt.plot(dmax[i],zmax[i],'o',c=cols[i])
+        for i in range(0,4):
+            plt.plot(dtoe[i],ztoe,'ob',ms=12)
+            plt.plot(dtoe[i],ztoe,'o',c=cols[i])
+        for i in range(0,4):
+            plt.plot(dowp[i],zowp,'og',ms=12)
+            plt.plot(dowp[i],zowp,'o',c=cols[i])
+        for i in range(0,4):
+            plt.plot(disl[i],datum,'oy',ms=12)
+            plt.plot(disl[i],datum,'o',c=cols[i])
         plt.legend()
         plt.ylim((-1., 6.))
         plt.xlim((lp*dx,0)) # this plots xaxis backwards
@@ -121,8 +228,22 @@ def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,iverbose=T
             pfn = 'p_'+title_str+'.png'
             plt.savefig(pfn,format='png',dpi=300)
 
-    return v, cxcy
+    return v, vp, cxcy, zmax, dmax, zmap0, dtoe, dowp
 
+def smooth(y, npts):
+    '''
+    Smooth a 1-d array with a moving average
+    https://stackoverflow.com/questions/20618804/how-to-smooth-a-curve-in-the-right-way
+
+    Input:
+        y - 1-d array
+        npts - number of points to average
+    Returns:
+        ys - smoothed arrays
+    '''
+    box = np.ones(npts)/npts
+    ys = np.convolve(y, box, mode='same')
+    return ys
 
 def centroid(x,z):
     cz = np.nanmean(z)
