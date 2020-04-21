@@ -3,6 +3,108 @@ import matplotlib.pyplot as plt
 import xarray as xr
 from scipy import interpolate, signal
 
+def stat_summary(x,iprint=False):
+    n = len(x)
+    nnan = np.sum(np.isnan(x))
+    meanx = np.nanmean(x)
+    stdx = np.nanstd(x)
+    minx = np.nanmin(x)
+    d5 = np.nanpercentile(x,5.)
+    d25 = np.nanpercentile(x,25.)
+    d50 = np.nanpercentile(x,50.)
+    d75 = np.nanpercentile(x,75.)
+    d95 = np.nanpercentile(x,95.)
+    maxx = np.nanmax(x)
+
+    # print('N      = ',n)
+    # print('N NaNs = ',nnan)
+    # print('Mean   = {:.3f}'.format(meanx))
+    # print('Median = {:.3f}'.format(d50))
+    # print('Std    = {:.4f}'.format(stdx))
+    # print('Min    = {:.3f}'.format(minx))
+    # print('d5     = {:.3f}'.format(d5))
+    # print('d25    = {:.3f}'.format(d25))
+    # print('d50    = {:.3f}'.format(d50))
+    # print('d75    = {:.3f}'.format(d75))
+    # print('d95    = {:.3f}'.format(d95))
+    # print('Max    = {:.3f}'.format(maxx))
+
+    # return it in a dict
+    s = {'n':n,'nnan':nnan,'mean':meanx,'std':stdx,'min':minx,'max':maxx,\
+         'd5':d5,'d25':d25,'d50':d50,'d75':d75,'d95':d95}
+    if iprint:
+        for key,value in s.items():
+            print('{:6s} = {:.3f}'.format(key,value))
+
+    return s
+
+def analyze_channels(diff,dx=1.,vthresh=0.5):
+    """
+    Calculate channel data from alongshore difference vector
+
+    Input:
+        diff - vector of alonshore elevation differences (m)
+        dx - spacing of points in diff (m)
+        vthres - vertical threshold for channel id (m)
+        hthresh - horizonal threshold (width) for channel id (m)
+
+        Assumes diff contains positive numbers for channel depths
+    """
+    # sumple calculation of channel area
+    diff[diff >= -vthresh]=0.
+    chana = np.cumsum(-diff)*dx
+    dlength = len(diff)*dx
+    print('Total channel area m^2/m: {:.2f}'.format(chana[-1]/dlength) )
+
+    nc = 0
+    channel_width = np.array([])
+    channel_max_depth = np.array([])
+    channel_avg_depth = np.array([])
+    channel_area = np.array([])
+
+    run = False
+    nc = 0
+    for i, z in enumerate(diff):
+        if i == 0:
+            if z <= -vthresh:
+                run=True
+                nc = nc+1
+                channel_width = np.append( channel_width, dx )
+                channel_max_depth = np.append( channel_max_depth, z)
+                channel_avg_depth = np.append( channel_avg_depth, z)
+                channel_area = np.append( channel_area, -z*dx )
+                channel_sum_depth = z
+        else:
+            if z <= -vthresh and run is False:
+                # start new channel
+                run = True
+                nc = nc+1
+                channel_width = np.append( channel_width, dx )
+                channel_max_depth = np.append( channel_max_depth, z)
+                channel_avg_depth = np.append( channel_avg_depth, z)
+                channel_area = np.append( channel_area, -z*dx )
+                channel_sum_depth = z
+            elif z <= -vthresh and run is True:
+                # update existing channel
+                run = True
+                channel_width[nc-1] = channel_width[nc-1]+dx
+                channel_max_depth[nc-1] = np.min( (channel_max_depth[nc-1], z) )
+                channel_sum_depth = channel_sum_depth + z
+                channel_avg_depth[nc-1] = channel_sum_depth/(channel_width[nc-1]/dx)
+                channel_area[nc-1] = -channel_avg_depth[nc-1]*channel_width[nc-1]
+            elif z >= -vthresh:
+                # reset
+                run = False
+
+    return nc, channel_area, channel_width, channel_max_depth, channel_avg_depth
+
+
+
+
+
+
+
+
 def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,\
     maxdist=400.,ztoe=2.1,zowp=1.25,nsmooth=51,iverbose=True,iplot=True,iprint=True):
     """
