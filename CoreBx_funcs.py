@@ -99,14 +99,8 @@ def analyze_channels(diff,dx=1.,vthresh=0.5):
     return nc, channel_area, channel_width, channel_max_depth, channel_avg_depth
 
 
-
-
-
-
-
-
 def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,\
-    maxdist=400.,ztoe=2.1,zowp=1.25,nsmooth=51,iverbose=True,iplot=True,iprint=True):
+    maxdist=200.,ztoe=2.3,zowp=1.25,nsmooth=51,iverbose=True,iplot=True,iprint=True):
     """
     Calculate cross-sectional volumes for barrier island profiles above datum.
     Assumes distance increases from offshore landward, but plots with ocean to right.
@@ -332,7 +326,7 @@ def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,\
 
     return v, vp, cxcy, zmax, dmax, zmap0, dtoe, dowp
 
-def smooth(y, npts):
+def running_mean(y, npts):
     '''
     Smooth a 1-d array with a moving average
     https://stackoverflow.com/questions/20618804/how-to-smooth-a-curve-in-the-right-way
@@ -346,6 +340,27 @@ def smooth(y, npts):
     box = np.ones(npts)/npts
     ys = np.convolve(y, box, mode='same')
     return ys
+
+def running_stddev(y, npts):
+    """
+    Smooth a 1-d array w/ moving average of npts
+    Return array of smoothed data and moving std. deviation
+    https://stackoverflow.com/questions/40773275/sliding-standard-deviation-on-a-1d-numpy-array
+
+    Input:
+        y - 1-d array
+        npts - number of points to average
+    Returns:
+        sy -  arrays or running std. deviation
+    """
+    sy = np.ones_like(y)*np.nan
+    nrows = y.size - npts + 1
+    n = y.strides[0]
+    y2D = np.lib.stride_tricks.as_strided(y,shape=(nrows,npts),strides=(n,n))
+    nclip = int((npts-1)/2)
+    print(nclip)
+    sy[nclip:-nclip] = np.std(y2D,1)
+    return sy
 
 def centroid(x,z):
     cz = np.nanmean(z)
@@ -382,6 +397,45 @@ def box2UTMh(x, y, x0, y0, theta):
     xr = xyrh[0,:]
     yr = xyrh[1,:]
     return xr, yr
+
+def pcoord(x, y):
+    """
+    Convert x, y to polar coordinates r, az (geographic convention)
+    r,az = pcoord(x, y)
+    """
+    r  = np.sqrt( x**2 + y**2 )
+    az=np.degrees( np.arctan2(x, y) )
+    # az[where(az<0.)[0]] += 360.
+    az = (az+360.)%360.
+    return r, az
+
+def xycoord(r, az):
+    """
+    Convert r, az [degrees, geographic convention] to rectangular coordinates
+    x,y = xycoord(r, az)
+    """
+    x = r * np.sin(np.radians(az))
+    y = r * np.cos(np.radians(az))
+    return x, y
+
+def UTM2rot(xutm,yutm,r):
+    """
+    Convert UTM coordinates to rotated coordinates
+    """
+    # Convert origin to UTM
+    xu,yu = box2UTMh(0.,0.,r['e0'],r['n0'],r['theta'])
+    # reverse the calc to find the origin (UTM =0,0) in box coordinates.
+    # First, just do the rotation to see where Box = 0,0 falls
+    xb0,yb0 = box2UTMh(xu,yu,0.,0.,-r['theta'])
+    # Then put in negative values for the offset
+    #TODO: why does this return a list of arrays?
+    xbl,ybl = box2UTMh(xutm,yutm,-xb0,-yb0,-r['theta'])
+    # this fixes it...probably should fix box2UTMh
+    xb = np.concatenate(xbl).ravel()
+    yb = np.concatenate(ybl).ravel()
+    return xb, yb
+
+
 
 def map_stats(mp,sfile):
     '''
