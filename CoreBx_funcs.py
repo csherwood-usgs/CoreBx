@@ -16,19 +16,6 @@ def stat_summary(x,iprint=False):
     d95 = np.nanpercentile(x,95.)
     maxx = np.nanmax(x)
 
-    # print('N      = ',n)
-    # print('N NaNs = ',nnan)
-    # print('Mean   = {:.3f}'.format(meanx))
-    # print('Median = {:.3f}'.format(d50))
-    # print('Std    = {:.4f}'.format(stdx))
-    # print('Min    = {:.3f}'.format(minx))
-    # print('d5     = {:.3f}'.format(d5))
-    # print('d25    = {:.3f}'.format(d25))
-    # print('d50    = {:.3f}'.format(d50))
-    # print('d75    = {:.3f}'.format(d75))
-    # print('d95    = {:.3f}'.format(d95))
-    # print('Max    = {:.3f}'.format(maxx))
-
     # return it in a dict
     s = {'n':n,'nnan':nnan,'mean':meanx,'std':stdx,'min':minx,'max':maxx,\
          'd5':d5,'d25':d25,'d50':d50,'d75':d75,'d95':d95}
@@ -99,8 +86,11 @@ def analyze_channels(diff,dx=1.,vthresh=0.5):
     return nc, channel_area, channel_width, channel_max_depth, channel_avg_depth
 
 
-def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,\
-    maxdist=200.,ztoe=2.3,zowp=1.25,nsmooth=51,iverbose=True,iplot=True,iprint=True):
+def pvol(dist,profs,pfill,dcrest,dback,\
+    title_str,pnames,imethod='extend',\
+    datum=0.4,\
+    maxdist=200.,ztoe=2.4,zowp=1.25,nsmooth=51,
+    iverbose=True,iplot=True,iprint=True):
     """
     Calculate cross-sectional volumes for barrier island profiles above datum.
     Assumes distance increases from offshore landward, but plots with ocean to right.
@@ -112,6 +102,8 @@ def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,\
         dist(lP) - cross-shore distance (m), starting from arbitrary offshore location
         profs(nmaps, lp) - multiple profiles elevations (m above some datum)
         pfill(lp) - single profile used to fill gaps in other profiles (pre-storm profile)
+        dcrest - cross-shore location of dune crest (estimated)
+        dback - cross-shore location of barrier platform (estimated)
         title_str - string used for title in plots
         pname - strings with names of profiles
         imethod -"extend" or "clip" TODO: check clip values
@@ -119,6 +111,10 @@ def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,\
         iverbose - "True" produces extra output
         iplot - "True" produces plot
         iprint - "True" saves plot
+
+    Returns:
+        v, vp, cxcy, zmax, dmax, zmap0, dtoe, dowp
+
     """
     # Colors from colorbrewer...but one more than needed so we can skip the first one (too light)
     cols=['#feedde','#fdbe85','#fd8d3c','#e6550d','#a63603']
@@ -203,22 +199,25 @@ def pvol(dist,profs,pfill,title_str,pnames,imethod='extend',datum=0.4,\
         # # restore values before first good value with NaNs
         # profs[i,:int(ix[i])]=np.nan
 
-    # find highest point in first maxdist m
+    # find highest point within 10 meters of estimated dune crest
     zmax = np.ones((nmaps))*np.nan
     zmap0 = np.ones((nmaps))*np.nan
     dmax = np.ones((nmaps))*np.nan
+    idcrest = int(np.max(dx*dcrest,0.)
+    idcrest_min = np.max(idcrest-10,0)
+    idcrest_max = np.min(idcrest+10,lp)
     for i in range((nmaps)):
         try:
-            imxh = np.nanargmax(profs[i,int(ix[i]):int(ix[i]+maxdist)])
+            imxh = int ( np.nanargmax(profs[i,idcrest_min:idcrest_max)]) )
             if i == 0:
-                ix0 = int(ix[0]+imxh)
-            zmax[i] = profs[i,int(ix[i]+imxh)]
-            zmap0[i] = profs[i,ix0] # z at location os zmax in first map
-            dmax[i] = dist[int(ix[i]+imxh)]
+                imx0 = imxh
+            zmax[i] = profs[i,imxh]
+            zmap0[i] = profs[i,imx0] # z at location os zmax in first map
+            dmax[i] = dist[imxh]
         except:
             pass
         if iverbose:
-            print("i, pmax, dmax",i, zmax[i], dmax[i])
+            print("i, zmax, dmax",i, zmax[i], dmax[i])
 
     # find dune toe as first point >= ztoe
     dtoe = np.ones((nmaps))*np.nan
