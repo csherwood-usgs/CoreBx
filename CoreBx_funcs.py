@@ -86,8 +86,9 @@ def analyze_channels(diff,dx=1.,vthresh=0.5):
     return nc, channel_area, channel_width, channel_max_depth, channel_avg_depth
 
 
-def pvol(dist,profs,pfill,dcrest,dback,\
+def pvol(dist,profs,pfill,dcrest_est,dback,\
     title_str,pnames,imethod='extend',\
+    dx = 1.,\
     datum=0.4,\
     maxdist=200.,ztoe=2.4,zowp=1.25,nsmooth=51,
     iverbose=True,iplot=True,iprint=True):
@@ -99,27 +100,30 @@ def pvol(dist,profs,pfill,dcrest,dback,\
     be reconsidered...maybe turned into datum.
 
     Input (lp is length of profiles, nmaps is number of profiles):
-        dist(lP) - cross-shore distance (m), starting from arbitrary offshore location
+        dist(lP) - cross-shore distance (m), starting from arbitrary offshore location, equally spaced at dx
         profs(nmaps, lp) - multiple profiles elevations (m above some datum)
         pfill(lp) - single profile used to fill gaps in other profiles (pre-storm profile)
-        dcrest - cross-shore location of dune crest (estimated)
-        dback - cross-shore location of barrier platform (estimated)
+        dcrest_est - cross-shore location of dune crest (estimated)
+        dback - cross-shore location of barrier platform (estimated as 1.25-m contour)
         title_str - string used for title in plots
-        pname - strings with names of profiles
-        imethod -"extend" or "clip" TODO: check clip values
-        datum - value used to calculate volumes
+        pnames - strings with names (dates) of profiles
+        imethod -"extend" or "clip" TODO: check clip code...that code is stale
+        dx - profile spacing (m)
+        datum - elevation used as floor to calculate volumes (m)
+        ztoe=2.4 - elevation for estimating dune toe (m)
+        maxdist=200.,,zowp=1.25,nsmooth=51,
         iverbose - "True" produces extra output
         iplot - "True" produces plot
         iprint - "True" saves plot
 
     Returns:
-        v, vp, cxcy, zmax, dmax, zmap0, dtoe, dowp
+        v, vp, cxcy, zmax, dmax, zcrest, dcrest, zcrest0, dtoe, width_island, width_platform
+        width_platform - distance from first point above datum to dback
 
     """
     # Colors from colorbrewer...but one more than needed so we can skip the first one (too light)
     cols=['#feedde','#fdbe85','#fd8d3c','#e6550d','#a63603']
 
-    dx = dist[1]-dist[0]
     nmaps, lp = np.shape(profs)
     if(iverbose):
         print('dx: ',dx)
@@ -143,7 +147,7 @@ def pvol(dist,profs,pfill,dcrest,dback,\
         profs[i,idx]=pfill[idx]
 
     # find first good value
-    ix = np.zeros((nmaps))
+    ix = np.zeros((nmaps), dtype=int)
     for i in range(0,nmaps):
         try:
             ix[i] = int(np.argwhere(np.isfinite(profs[i,:]))[0])
@@ -151,9 +155,49 @@ def pvol(dist,profs,pfill,dcrest,dback,\
             # fails because entire profile is NaN
             ix[i] = 0
     if(iverbose):
-        print('indices to first good value, value: ')
-        print(ix)
+        print('indices to first valid value: {} value: {}'.format(ix,profs[i,ix]))
 
+    # determine first point >= datum
+    ixd = np.zeros((nmaps), dtype=int)
+    for i in range(0,nmaps):
+        try:
+            ixd[i] = int(np.argwhere((profs[i,:]>=datum))[0])
+        except:
+            # fails because entire profile is NaN
+            ixd[i] = 0
+    if(iverbose):
+        print('indices to first value >= {}: {} value: {}'.format(datum,ixd,profs[i,ixd]))
+
+    # find the back of the island using datum
+    iisl = np.zeros((nmaps), dtype=int)
+    disl = np.ones((nmaps))*np.nan
+    for i in range((nmaps)):
+        try:
+            # find last point >= datum
+            #iisl = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=datum))[-1]
+            iisl[i] = np.squeeze(np.where(profs[i,int(ix[i]):-1]>=datum))[-1]
+            disl[i] = dist[int(ix[i]+iisl[i])]
+        except:
+            pass
+        if iverbose:
+            print("iisl, disl",iisl[i], disl[i])
+
+    # calculate total width of Island
+    width_island = np.zeros((nmaps))*np.NaN
+    width_platform = np.zeros((nmaps))*np.NaN
+    for i in range((nmaps)):
+        try:
+            width_island[i]=(iisl[i]-ixd[i])*dx
+        except:
+            pass
+        try:
+            width_platform[i]=(dback-dist[i,idx[i]])
+        except:
+            pass
+        if iverbose:
+            print("width, platform width",width_island[i], width_platform[i])
+
+    # extend the profiles with linear fit or zeros
     if(imethod is 'extend' ):
         title_str = title_str+'_extended'
         if iverbose:
@@ -193,27 +237,40 @@ def pvol(dist,profs,pfill,dcrest,dback,\
         imx = int(np.max(ix))
         profs[:,0:imx]=0.
 
+    # replace any other NaNs with zero
     for i in range(0,nmaps):
-        # replace any other NaNs with zero
         profs[i,np.isnan(profs[i,:])]=0.
-        # # restore values before first good value with NaNs
-        # profs[i,:int(ix[i])]=np.nan
 
-    # find highest point within 10 meters of estimated dune crest
+    # find the highest point in the profile
     zmax = np.ones((nmaps))*np.nan
-    zmap0 = np.ones((nmaps))*np.nan
     dmax = np.ones((nmaps))*np.nan
-    idcrest = int(np.max(dx*dcrest,0.)
-    idcrest_min = np.max(idcrest-10,0)
-    idcrest_max = np.min(idcrest+10,lp)
     for i in range((nmaps)):
         try:
-            imxh = int ( np.nanargmax(profs[i,idcrest_min:idcrest_max)]) )
-            if i == 0:
-                imx0 = imxh
+            imxh = int ( np.nanargmax(profs[i,:]) )
             zmax[i] = profs[i,imxh]
-            zmap0[i] = profs[i,imx0] # z at location os zmax in first map
             dmax[i] = dist[imxh]
+        except:
+            pass
+        if iverbose:
+            print("i, zmax, dmax",i, zmax[i], dmax[i])
+
+    # find highest point within 10 meters of estimated dune crest
+    print('dcrest_est: ',dcrest_est)
+    zcrest0 = np.ones((nmaps))*np.nan
+    zcrest = np.ones((nmaps))*np.nan
+    dcrest = np.ones((nmaps))*np.nan
+    idcrest = int(max(dx*dcrest_est,0.))
+    idcrest_min = int(max(idcrest-10,0))
+    idcrest_max = int(min(idcrest+10,lp))
+
+    for i in range((nmaps)):
+        try:
+            idc = int ( np.nanargmax( profs[i,idcrest_min:idcrest_max]) )
+            if i == 0:
+                idc0 = idc
+            zcrest[i] = profs[i,idc]
+            zcrest0[i] = profs[i,idc0] # z at location os zmax in first map
+            dcrest[i] = dist[idc]
         except:
             pass
         if iverbose:
@@ -232,48 +289,36 @@ def pvol(dist,profs,pfill,dcrest,dback,\
             if iverbose:
                 print("i, dtoe",i, dtoe[i])
 
-    # find the back of the island using datum
-    disl = np.ones((nmaps))*np.nan
-    for i in range((nmaps)):
-        try:
-            # find last point >= datum
-            #iisl = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=datum))[-1]
-            iisl = np.squeeze(np.where(profs[i,int(ix[i]):-1]>=datum))[-1]
-            disl[i] = dist[int(ix[i]+iisl)]
-            if iverbose:
-                print("i, disl",i, disl[i])
-        except:
-            if iverbose:
-                print("i, disl",i, disl[i])
 
     # find the back of the overwash platform using zowp
-    dowp = np.ones((nmaps))*np.nan
-    for i in range((nmaps)):
-        # smooth the profile
-        ps = smooth(np.squeeze(profs[i,:]),nsmooth)
-        # find last point >zowp
-        # iowp = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=zowp))[-1]
-        # iowp = np.squeeze(np.where(ps[int(ix[i]):int(ix[i]+maxdist)]>=zowp))[-1]
-        try:
-            iowp = np.squeeze(np.where(ps[int(ix[i]):-1]>=zowp))[-1]
-            dowp[i] = dist[int(ix[i]+iowp)]
-            if iverbose:
-                print("i, dowp",i, dowp[i])
-        except:
-            if iverbose:
-                print("i, dowp",i, dowp[i])
-    # if back of platforn is not found, use half the distance from the crest to the back of the island
-    if not np.isfinite(dowp[0]):
-        if np.isfinite(disl[0]):
-            dowp[0] = dmax[0]+0.5*(disl[0]-dmax[0])
-        else:
-            dowp[0] = dmax[0]
+    # this code is no longer used...back of platform now comes in as dback
+    # dowp = np.ones((nmaps))*np.nan
+    # for i in range((nmaps)):
+    #     # smooth the profile
+    #     ps = smooth(np.squeeze(profs[i,:]),nsmooth)
+    #     # find last point >zowp
+    #     # iowp = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=zowp))[-1]
+    #     # iowp = np.squeeze(np.where(ps[int(ix[i]):int(ix[i]+maxdist)]>=zowp))[-1]
+    #     try:
+    #         iowp = np.squeeze(np.where(ps[int(ix[i]):-1]>=zowp))[-1]
+    #         dowp[i] = dist[int(ix[i]+iowp)]
+    #         if iverbose:
+    #             print("i, dowp",i, dowp[i])
+    #     except:
+    #         if iverbose:
+    #             print("i, dowp",i, dowp[i])
+    # # if back of platforn is not found, use half the distance from the crest to the back of the island
+    # if not np.isfinite(dowp[0]):
+    #     if np.isfinite(disl[0]):
+    #         dowp[0] = dmax[0]+0.5*(disl[0]-dmax[0])
+    #     else:
+    #         dowp[0] = dmax[0]
 
     # Calculate volumes
     profd = profs.copy()-datum
     profd[np.where(profd<=0.)]=0.
     v = np.sum(profd,1)*dx
-    vp = np.sum(profd[:,0:int(ix[i]+dowp[0])],1)*dx
+    vp = np.sum(profd[:,ix[i]:int(dback/dx)])*dx
     if iverbose:
         print("Island volumes: ", v)
         print('Platform volumes:', vp)
@@ -307,12 +352,12 @@ def pvol(dist,profs,pfill,dcrest,dback,\
         for i in range(0,4):
             plt.plot(dtoe[i],ztoe,'ob',ms=12)
             plt.plot(dtoe[i],ztoe,'o',c=cols[i])
-        for i in range(0,4):
-            plt.plot(dowp[i],zowp,'og',ms=12)
-            plt.plot(dowp[i],zowp,'o',c=cols[i])
-        for i in range(0,4):
-            plt.plot(disl[i],datum,'oy',ms=12)
-            plt.plot(disl[i],datum,'o',c=cols[i])
+        # for i in range(0,4):
+        #     plt.plot(dbak[i],zowp,'og',ms=12)
+        #     plt.plot(dowp[i],zowp,'o',c=cols[i])
+        # for i in range(0,4):
+        #     plt.plot(disl[i],datum,'oy',ms=12)
+        #     plt.plot(disl[i],datum,'o',c=cols[i])
         plt.legend()
         plt.ylim((-1., 6.))
         plt.xlim((lp*dx,0)) # this plots xaxis backwards
@@ -323,7 +368,8 @@ def pvol(dist,profs,pfill,dcrest,dback,\
             pfn = 'p_'+title_str+'.png'
             plt.savefig(pfn,format='png',dpi=300)
 
-    return v, vp, cxcy, zmax, dmax, zmap0, dtoe, dowp
+    return v, vp, cxcy, zmax, dmax, zcrest, dcrest, zcrest0, dtoe, width_island, width_platform
+
 
 def running_mean(y, npts):
     '''
