@@ -6,15 +6,28 @@ from scipy import interpolate, signal
 def stat_summary(x,iprint=False):
     n = len(x)
     nnan = np.sum(np.isnan(x))
-    meanx = np.nanmean(x)
-    stdx = np.nanstd(x)
-    minx = np.nanmin(x)
-    d5 = np.nanpercentile(x,5.)
-    d25 = np.nanpercentile(x,25.)
-    d50 = np.nanpercentile(x,50.)
-    d75 = np.nanpercentile(x,75.)
-    d95 = np.nanpercentile(x,95.)
-    maxx = np.nanmax(x)
+    # intitialize with NaNs
+
+    if n > nnan:
+        meanx = np.nanmean(x)
+        stdx = np.nanstd(x)
+        minx = np.nanmin(x)
+        d5 = np.nanpercentile(x,5.)
+        d25 = np.nanpercentile(x,25.)
+        d50 = np.nanpercentile(x,50.)
+        d75 = np.nanpercentile(x,75.)
+        d95 = np.nanpercentile(x,95.)
+        maxx = np.nanmax(x)
+    else:
+        meanx = np.NaN
+        stdx = np.NaN
+        minx = np.NaN
+        d5   = np.NaN
+        d25 = np.NaN
+        d50 = np.NaN
+        d75 = np.NaN
+        d95 = np.NaN
+        maxx = np.NaN
 
     # return it in a dict
     s = {'n':n,'nnan':nnan,'mean':meanx,'std':stdx,'min':minx,'max':maxx,\
@@ -25,25 +38,28 @@ def stat_summary(x,iprint=False):
 
     return s
 
-def analyze_channels(diff,dx=1.,vthresh=0.5):
+def analyze_channels(x,diff,dx=1.,vthresh=0.5):
     """
     Calculate channel data from alongshore difference vector
 
     Input:
-        diff - vector of alonshore elevation differences (m)
+        x - vector of alongshore locations
+        diff - vector of alongshore elevations (m)
         dx - spacing of points in diff (m)
         vthres - vertical threshold for channel id (m)
         hthresh - horizonal threshold (width) for channel id (m)
 
-        Assumes diff contains positive numbers for channel depths
+        Assumes diff is postive
+
     """
     # sumple calculation of channel area
-    diff[diff >= -vthresh]=0.
-    chana = np.cumsum(-diff)*dx
+    diff[diff <= vthresh]=0.
+    chana = np.cumsum(diff)*dx
     dlength = len(diff)*dx
     print('Total channel area m^2/m: {:.2f}'.format(chana[-1]/dlength) )
 
     nc = 0
+    channel_strt = np.array([])
     channel_width = np.array([])
     channel_max_depth = np.array([])
     channel_avg_depth = np.array([])
@@ -53,37 +69,41 @@ def analyze_channels(diff,dx=1.,vthresh=0.5):
     nc = 0
     for i, z in enumerate(diff):
         if i == 0:
-            if z <= -vthresh:
+            if z >= vthresh:
+                # handle first points
                 run=True
                 nc = nc+1
+                channel_strt = np.append( channel_strt, x[i] )
                 channel_width = np.append( channel_width, dx )
                 channel_max_depth = np.append( channel_max_depth, z)
                 channel_avg_depth = np.append( channel_avg_depth, z)
-                channel_area = np.append( channel_area, -z*dx )
+                channel_area = np.append( channel_area, z*dx )
                 channel_sum_depth = z
         else:
-            if z <= -vthresh and run is False:
+            if z >= vthresh and run is False:
                 # start new channel
                 run = True
                 nc = nc+1
+                channel_strt = np.append( channel_strt, x[i] )
                 channel_width = np.append( channel_width, dx )
                 channel_max_depth = np.append( channel_max_depth, z)
                 channel_avg_depth = np.append( channel_avg_depth, z)
-                channel_area = np.append( channel_area, -z*dx )
+                channel_area = np.append( channel_area, z*dx )
                 channel_sum_depth = z
-            elif z <= -vthresh and run is True:
+            elif z >= vthresh and run is True:
                 # update existing channel
                 run = True
                 channel_width[nc-1] = channel_width[nc-1]+dx
-                channel_max_depth[nc-1] = np.min( (channel_max_depth[nc-1], z) )
+                channel_max_depth[nc-1] = np.max( (channel_max_depth[nc-1], z) )
                 channel_sum_depth = channel_sum_depth + z
                 channel_avg_depth[nc-1] = channel_sum_depth/(channel_width[nc-1]/dx)
-                channel_area[nc-1] = -channel_avg_depth[nc-1]*channel_width[nc-1]
-            elif z >= -vthresh:
+                channel_area[nc-1] = channel_avg_depth[nc-1]*channel_width[nc-1]
+            elif z <= vthresh:
                 # reset
                 run = False
 
-    return nc, channel_area, channel_width, channel_max_depth, channel_avg_depth
+    channel_ctr = channel_strt + 0.5*channel_width
+    return nc, channel_ctr, channel_area, channel_width, channel_max_depth, channel_avg_depth
 
 
 def pvol(dist,profs,pfill,dcrest_est,dback,\
@@ -401,6 +421,26 @@ def running_mean(y, npts):
     ys = np.convolve(y, box, mode='same')
     return ys
 
+def running_nanmean(y, npts):
+    '''
+    Smooth a 1-d array with a moving average
+    https://stackoverflow.com/questions/40773275/sliding-standard-deviation-on-a-1d-numpy-array
+
+    Input:
+        y - 1-d array
+        npts - number of points to average
+    Returns:
+        ys - smoothed arrays
+    '''
+    sy = np.ones_like(y)*np.nan
+    nrows = y.size - npts + 1
+    n = y.strides[0]
+    y2D = np.lib.stride_tricks.as_strided(y,shape=(nrows,npts),strides=(n,n))
+    nclip = int((npts-1)/2)
+    # print(nclip)
+    sy[nclip:-nclip] = np.nanmean(y2D,1)
+    return sy
+
 def running_stddev(y, npts):
     """
     Smooth a 1-d array w/ moving average of npts
@@ -411,15 +451,15 @@ def running_stddev(y, npts):
         y - 1-d array
         npts - number of points to average
     Returns:
-        sy -  arrays or running std. deviation
+        sy -  array of running std. deviation
     """
     sy = np.ones_like(y)*np.nan
     nrows = y.size - npts + 1
     n = y.strides[0]
     y2D = np.lib.stride_tricks.as_strided(y,shape=(nrows,npts),strides=(n,n))
     nclip = int((npts-1)/2)
-    print(nclip)
-    sy[nclip:-nclip] = np.std(y2D,1)
+    # print(nclip)
+    sy[nclip:-nclip] = np.nanstd(y2D,1)
     return sy
 
 def centroid(x,z):
