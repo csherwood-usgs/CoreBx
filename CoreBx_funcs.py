@@ -518,9 +518,21 @@ def xycoord(r, az):
     y = r * np.cos(np.radians(az))
     return x, y
 
+def UTM2Island(eutm, nutm, eoff=378489.45785127, noff=3855740.50113774, rot=42.):
+    """
+    Convert UTM NAD83 Zone 18N easting, northing to N. Core Banks alongshore, cross-shore coordinates
+    xisl, yisl = UTM2Island( eutm, nutm )
+    """
+    [r,az]=pcoord(eutm-eoff,nutm-noff)
+    az = az+rot;
+    [xisl,yisl]=xycoord(r,az)
+    return xisl, yisl
+
 def UTM2rot(xutm,yutm,r):
     """
     Convert UTM coordinates to rotated coordinates
+
+    Now deprecated by UTM2Island ... delete  
     """
     # Convert origin to UTM
     xu,yu = box2UTMh(0.,0.,r['e0'],r['n0'],r['theta'])
