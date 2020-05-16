@@ -32,9 +32,15 @@ def stat_summary(x,iprint=False):
     # return it in a dict
     s = {'n':n,'nnan':nnan,'mean':meanx,'std':stdx,'min':minx,'max':maxx,\
          'd5':d5,'d25':d25,'d50':d50,'d75':d75,'d95':d95}
+    # if iprint:
+    #     for key,value in s.items():
+    #         print('{:6s} = {:.3f}'.format(key,value)),
     if iprint:
-        for key,value in s.items():
-            print('{:6s} = {:.3f}'.format(key,value))
+        print("  n, nnan: ",s['n'],s['nnan'])
+        print("  mean, std, min, max   : {:.3f} {:.3f} {:.3f} {:.3f}".\
+        format(s['mean'],s['std'],s['min'],s['max']))
+        print("  d5, d25, d50, d75, d95: {:.3f} {:.3f} {:.3f} {:.3f} {:.3f}".\
+        format(s['d5'],s['d25'],s['d50'],s['d75'],s['d95']))
 
     return s
 
@@ -532,7 +538,7 @@ def UTM2rot(xutm,yutm,r):
     """
     Convert UTM coordinates to rotated coordinates
 
-    Now deprecated by UTM2Island ... delete  
+    Now deprecated by UTM2Island ... delete
     """
     # Convert origin to UTM
     xu,yu = box2UTMh(0.,0.,r['e0'],r['n0'],r['theta'])
