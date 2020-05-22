@@ -456,6 +456,26 @@ def running_nanmean(y, npts):
     sy[nclip:-nclip] = np.nanmean(y2D,1)
     return sy
 
+def running_nanmin(y, npts):
+    '''
+    Smooth a 1-d array with a moving minimum
+    https://stackoverflow.com/questions/40773275/sliding-standard-deviation-on-a-1d-numpy-array
+
+    Input:
+        y - 1-d array
+        npts - number of points to average
+    Returns:
+        ys - smoothed arrays
+    '''
+    sy = np.ones_like(y)*np.nan
+    nrows = y.size - npts + 1
+    n = y.strides[0]
+    y2D = np.lib.stride_tricks.as_strided(y,shape=(nrows,npts),strides=(n,n))
+    nclip = int((npts-1)/2)
+    # print(nclip)
+    sy[nclip:-nclip] = np.nanmin(y2D,1)
+    return sy
+
 def running_stddev(y, npts):
     """
     Smooth a 1-d array w/ moving average of npts
