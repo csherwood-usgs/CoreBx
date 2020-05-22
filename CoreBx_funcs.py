@@ -127,15 +127,15 @@ def pvol(dist,profs,pfill,dcrest_est,dback,\
 
     Input (lp is length of profiles, nmaps is number of profiles):
         dist(lP) - cross-shore distance (m), starting from arbitrary offshore location, equally spaced at dx
-        profs(nmaps, lp) - multiple profiles elevations (m above some datum)
+        profs(nmaps, lp) - multiple profiles elevations (m relative to some datum)
         pfill(lp) - single profile used to fill gaps in other profiles (pre-storm profile)
         dcrest_est - cross-shore location of dune crest (estimated)
         dback - cross-shore location of barrier platform (estimated as 1.25-m contour)
         title_str - string used for title in plots
         pnames - strings with names (dates) of profiles
         imethod -"extend" or "clip" TODO: check clip code...that code is stale
-        dx - profile spacing (m)
-        datum - elevation used as floor to calculate volumes (m)
+        dx - profile spacing (m) TODO: check to make sure dx==1 is not assumed
+        datum - elevation used as floor to calculate volumes (m) (not same as profile datum)
         ztoe=2.4 - elevation for estimating dune toe (m)
         maxdist=200.,,zowp=1.25,nsmooth=51,
         iverbose - "True" produces extra output
@@ -143,8 +143,17 @@ def pvol(dist,profs,pfill,dcrest_est,dback,\
         iprint - "True" saves plot
 
     Returns:
-        v, vp, cxcy, zmax, dmax, zcrest, dcrest, zcrest0, dtoe, width_island, width_platform
-        width_platform - distance from first point above datum to dback
+        v - volume of profile between first datum and back of island (m2)
+        vp - volume of profile between first datum and back of platform (m2)
+        cxcy - x,y pair with centriod location (cross-shore, elevation) (m, m) [misnamed: should be cxcz]
+        zmax - highest point in the profile (m)
+        dmax - profile distance to highest point (m)
+        zcrest - elevation of highest point near digitized dune line (m)
+        dcrest - profile distance to zcrest (m)
+        zcrest0 - elevation at same loction as dcrest[0] (m)
+        dtoe - profile distance to first elevation >= ztoe (m)
+        width_island - distance from first point above datum to back of island (m)
+        width_platform - distance from first point above datum to dback (m)
 
     """
     # Colors from colorbrewer...but one more than needed so we can skip the first one (too light)
