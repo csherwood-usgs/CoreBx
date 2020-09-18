@@ -227,6 +227,7 @@ def pvol(dist,profs,pfill,dcrest_est,dback,\
 
     # determine first point >= datum (do this after fitting profile)
     ixd = np.zeros((nmaps), dtype=int)
+    dshore = np.zeros((nmaps), dtype=np.float)
     for i in range(0,nmaps):
         try:
             ixd[i] = int(np.argwhere((profs[i,:]>=datum))[0])
