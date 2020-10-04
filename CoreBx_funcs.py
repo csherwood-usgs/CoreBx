@@ -2,6 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
 from scipy import interpolate, signal
+from scipy.stats import linregress
+
+def nanlsfit(x,y):
+    """least-squares fit of data with NaNs"""
+    ok = ~np.isnan(x) & ~np.isnan(y)
+    n = len(ok)
+    xx = x[ok]
+    yy = y[ok]
+    slope, intercept, r, p, stderr = linregress(xx,yy)
+    print("n={}; slope, intercept= {:.4f},{:.4f}; r={:.4f} p={:.4f}, stderr={:.4f} ".format(n, slope, intercept, r, p, stderr))
+    return n, slope, intercept, r, p, stderr
 
 def stat_summary(x,iprint=False):
     n = len(x)
