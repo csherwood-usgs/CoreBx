@@ -7,7 +7,7 @@ from scipy.stats import linregress
 def nanlsfit(x,y):
     """least-squares fit of data with NaNs"""
     ok = ~np.isnan(x) & ~np.isnan(y)
-    n = len(ok)
+    n = len(ok[ok==True])
     xx = x[ok]
     yy = y[ok]
     slope, intercept, r, p, stderr = linregress(xx,yy)
