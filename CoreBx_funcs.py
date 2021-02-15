@@ -17,6 +17,7 @@ def nanlsfit(x,y):
 def stat_summary(x,iprint=False):
     n = len(x)
     nnan = np.sum(np.isnan(x))
+    nvalid = n-nnan
     # intitialize with NaNs
 
     if n > nnan:
@@ -41,13 +42,13 @@ def stat_summary(x,iprint=False):
         maxx = np.NaN
 
     # return it in a dict
-    s = {'n':n,'nnan':nnan,'mean':meanx,'std':stdx,'min':minx,'max':maxx,\
+    s = {'n':n,'nnan':nnan,'nvalid':nvalid,'mean':meanx,'std':stdx,'min':minx,'max':maxx,\
          'd5':d5,'d25':d25,'d50':d50,'d75':d75,'d95':d95}
     # if iprint:
     #     for key,value in s.items():
     #         print('{:6s} = {:.3f}'.format(key,value)),
     if iprint:
-        print("  n, nnan: ",s['n'],s['nnan'])
+        print("  n, nnan, nvalid: ",s['n'],s['nnan'],s['nvalid'])
         print("  mean, std, min, max   : {:.3f} {:.3f} {:.3f} {:.3f}".\
         format(s['mean'],s['std'],s['min'],s['max']))
         print("  d5, d25, d50, d75, d95: {:.3f} {:.3f} {:.3f} {:.3f} {:.3f}".\
