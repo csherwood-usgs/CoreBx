@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 from scipy import interpolate, signal
 from scipy.stats import linregress
+from pyproj import Proj, transform
 
 def calcR2(H,T,slope,igflag=0):
     """
@@ -12,9 +13,9 @@ def calcR2(H,T,slope,igflag=0):
     % Calculated 2% runup (R2), swash (S), setup (setup), incident swash (Sinc)
     % and infragravity swash (SIG) elevations based on parameterizations from runup paper
     % also Iribarren (ir)
-    % August 2010 - Included 15% runup (R16) statistic that, for a Guassian distribution, 
-    % represents mean+sigma. It is calculated as R16 = setup + swash/4.  
-    % In a wave tank, Palmsten et al (2010) found this statistic represented initiation of dune erosion. 
+    % August 2010 - Included 15% runup (R16) statistic that, for a Guassian distribution,
+    % represents mean+sigma. It is calculated as R16 = setup + swash/4.
+    % In a wave tank, Palmsten et al (2010) found this statistic represented initiation of dune erosion.
     %
     %
     % H = significant wave height, reverse shoaled to deep water
@@ -181,10 +182,10 @@ def analyze_channels(x,diff,dx=1.,vthresh=0.5):
     return nc, channel_ctr, channel_area, channel_width, channel_max_depth, channel_avg_depth
 
 
-def pvol(dist,profs,pfill,dcrest_est,dback,\
-    title_str,pnames,imethod='extend',\
-    dx = 1.,\
-    datum=0.4,\
+def pvol(dist,profs,pfill,dcrest_est,dback,
+    title_str,pnames,imethod='extend',
+    dx = 1.,
+    datum=0.4,
     maxdist=200.,ztoe=2.4,zowp=1.25,nsmooth=51,
     iverbose=True,iplot=True,iprint=True):
     """
@@ -632,6 +633,18 @@ def UTM2Island(eutm, nutm, eoff=378489.45785127, noff=3855740.50113774, rot=42.)
     az = az+rot;
     [xisl,yisl]=xycoord(r,az)
     return xisl, yisl
+
+def LatLon2UTM(lat,lon,initepsg='epsg:26918'):
+    """
+    Convert lat lon (WGS84) to UTM.
+    Defaults to Zone 18N
+
+    TODO: Update to Proj 6 and correct this syntax
+    """
+    inProj = Proj(init='epsg:4326')
+    outProj = Proj(init=initepsg)
+    outx,outy=transform(inProj,outProj,lon,lat)
+    return outx, outy
 
 def UTM2rot(xutm,yutm,r):
     """
