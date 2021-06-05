@@ -646,6 +646,18 @@ def LatLon2UTM(lat,lon,initepsg='epsg:26918'):
     outx,outy=transform(inProj,outProj,lon,lat)
     return outx, outy
 
+def UTM2LatLon(easting,northing,initepsg='epsg:26918'):
+    """
+    Convert UTM to lat, lon (WGS84)
+    Defaults to Zone 18N
+
+    TODO: Update to Proj 6 and correct this syntax
+    """
+    outProj = Proj(init='epsg:4326')
+    inProj = Proj(init=initepsg)
+    lon,lat=transform(inProj,outProj,easting,northing)
+    return lon, lat
+
 def UTM2rot(xutm,yutm,r):
     """
     Convert UTM coordinates to rotated coordinates
