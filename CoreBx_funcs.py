@@ -257,7 +257,7 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
             ix[i] = 0
 
     # extend the profiles with linear fit or zeros
-    if(imethod is 'extend' ):
+    if(imethod == 'extend' ):
         title_str = title_str+'_extended'
         if iverbose:
             print('extend')
@@ -287,7 +287,7 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
                         profs[i,int(ix[i]+1):int(ix[i]+1+npts)])
                 # fill with zeros
                 profs[i,0:int(ix[i])]=0.
-    elif(imethod is 'clip'):
+    elif(imethod == 'clip'):
         # truncate the profiles to start at common point (profile w/ least data)
         title_str = title_str+'_clip'
         if iverbose:
@@ -572,6 +572,47 @@ def centroid(x,z):
     cz = np.nanmean(z)
     cx = np.nansum(z*x)/np.nansum(z)
     return(cx,cz)
+
+def make_grid(name=None,e0=None,n0=None,xlen=None,ylen=None,dxdy=None,theta=None):
+    """
+    Make a rectangular grid to interpolate elevations onto.
+    Takes as argument array of dicts, like:
+    r={'name': 'ncorebx_refac', 'e0': 378490., 'n0': 3855740., 'xlen': 36500.0, 'ylen': 1500.0, 'dxdy': 1.0, 'theta': 42.0}
+    where:
+      e0 - UTM Easting of origin [m]
+      n0 - UTM Northing of origin [m]
+      xlen - Length of alongshore axis [m]
+      ylen - Length of cross-shore axis [m]
+      dxdy - grid size (must be isotropic right now) [m]
+      theta - rotation CCW from x-axis [deg]
+    """
+    nx = int((1./dxdy)*xlen)
+    ny = int((1./dxdy)*ylen)
+
+    xcoords = np.linspace(0.5*dxdy,xlen-0.5*dxdy,nx)
+    ycoords = np.linspace(0.5*dxdy,ylen-0.5*dxdy,ny)
+
+    # these will be the coordinates in rotated space
+    xrot, yrot = np.meshgrid(xcoords, ycoords ,sparse=False, indexing='xy')
+
+    print('make_grid: Shape of xrot, yrot: ',np.shape(xrot),np.shape(yrot))
+    shp = np.shape(xrot)
+    xu, yu = box2UTMh(xrot.flatten(), yrot.flatten(), e0, n0, theta)
+    xu=np.reshape(xu,shp)
+    yu=np.reshape(yu,shp)
+    # write the UTM coords of the corners to an ASCII file
+    corners = np.asarray(  [[xu[0][0],yu[0][0]],\
+                           [xu[0][-1],yu[0][-1]],\
+                           [xu[-1][-1],yu[-1][-1]],\
+                           [xu[-1][0],yu[-1][0]],\
+                           [xu[0][0],yu[0][0]]])
+
+    print('corners x, corners y]')
+    print(corners)
+    fn_corners = name+'.csv'
+    print('Saving to '+fn_corners)
+    np.savetxt(fn_corners, corners, delimiter=",")
+    return xu, yu, xrot, yrot, xcoords, ycoords
 
 def box2UTMh(x, y, x0, y0, theta):
     '''
