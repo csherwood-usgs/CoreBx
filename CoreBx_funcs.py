@@ -4,6 +4,7 @@ import xarray as xr
 from scipy import interpolate, signal
 from scipy.stats import linregress
 from pyproj import Proj, transform
+import yaml
 
 def calcR2(H,T,slope,igflag=0):
     """
@@ -718,7 +719,26 @@ def UTM2rot(xutm,yutm,r):
     yb = np.concatenate(ybl).ravel()
     return xb, yb
 
+def yaml2dict(yamlfile):
+    """Import contents of a YAML file as a dict
 
+    Args:
+        yamlfile (str): YAML file to read
+
+    Returns:
+        dict interpreted from YAML file
+
+    Raises:
+
+    """
+    dictname = None
+    with open(yamlfile, "r") as infile:
+        try:
+            dictname = yaml.safe_load(infile)
+        except yaml.YAMLerror as exc:
+            print(exc)
+
+    return dictname
 
 def map_stats(mp,sfile):
     '''

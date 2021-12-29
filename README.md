@@ -1,25 +1,25 @@
 # CoreBx
 Code to analyze North Core Banks DEMs
 
-This is in ../proj/2019_DorianOBX/WayneWright_flights/CoreBx on my desktop. Same place on my laptop.
+This has been moved to ..crs/src ../proj/CoreBx on my latptop. Not yet moved on my desktop.
 
-April 9 - Switched DEM for September from _crop to _v3.
+December 11 2021 - Working on rebuilding laptop after new disk encryption installed. Renamed default branch from `master` to `main` and created branch `refac`, hoping to clean cobwebs out.
 
-`Uncertainty_calcs.ipynb` - Overall estimates of uncertainty in N Core Banks calcs.
+### Data  
+#### Original Analysis  
 
-`Analyze_stable_points.ipynb` - Calc. statistics on elevations pulled from GlobalMapper DEMs. Now out of date, because not yet run with _v3.
+
+`Uncertainty_calcs.ipynb` - Overall estimates of uncertainty in N Core Banks calcs.  
+
+`Analyze_rotated_stable_points_refac.ipynb` - Calc. statistics on elevations for stable points by pulling them from the gridded, rotated DEMs. Replaces earlier versions.  
 
 `Depth_change_histograms.ipynb` - Kind of hypsometric view of changes in profiles. Last revised in Santa Cruz. Needs to be redone with latest calcs.
 
 `CoreBx_funcs.py` - Utility functions called by the notebooks below.
 
-`CoreBx_island_v2.ipynb` - Interpolate DEMS onto rotated grid for entire island. Produces `ncbanks.nc`
+`CoreBx_island_island_refac.ipynb` - Interpolate DEMS onto rotated grid for entire island. Produces 3D array of DEMs called `ncorebx_refac.nc`. This version replaces all of the previous `Process` scripts. Switched to rioxarray. No uses yaml file to define rotated coord. system. Tried to correct axis labelling for along- and cross-shore axes.  
 
-`Process_CoreBx_island_v4.ipynb` - Current working version to process `ncbanks.nc` Older versions include `Process_CoreBx_island_v3.ipynb`
-
-`CoreBx_multi_v3.ipynb` - Current version to rotate N. Core Banks DEMs by region. Produces `region_X.nc` for nine regions. Starting with v3, a fill map is generated from a September surface that Andy made. Older versions are: `CoreBx_multi.ipynb` and `CoreBx_multi_v2.ipynb`. After this is run, then run:
-
-`Process_CoreBx_multi_v3.ipynb` - This makes the volume calcs and plots. Older versions: `Process_CoreBx_multi.ipynb` and `Process_CoreBx_multi_v2.ipynb`
+`Process_`
 
 `Centroid_test_profile.ipynb` - This uses `profile_a.csv` and makes the multi-plot profile results used in the eposter.
 
@@ -27,11 +27,13 @@ April 9 - Switched DEM for September from _crop to _v3.
 
 `Check_centroid_calcs.ipynb` - Just a test of centroid calcs.
 
-`NC_SeaGrant_profile.ipynb` - Code used to make profile for NC SeaGrant article. Superceded by 
+`NC_SeaGrant_profile.ipynb` - Code used to make profile for NC SeaGrant article. Superceded by
 
 `pybeach_example_notebook.ipynb` - Evaluating pybeach profle tool.
 
-`test_coord_transformations.ipynb` - Example of round-trip UTM to rotated coords.
+`test_coord_transformations.ipynb` - Example of round-trip UTM to rotated coords.  
+
+`test_find_dune_toe.ipynb` - This tests a function I wrote for finding dune toe and also runs the pybeach dune toes.  
 
 `Tif_read_write.ipynb` - Trying to round trip tif files...not there yet.
 
