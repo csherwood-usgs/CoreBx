@@ -187,7 +187,7 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
     title_str,pnames,imethod='extend',
     dx = 1.,
     datum=0.4,
-    maxdist=200.,ztoe=2.4,zowp=1.25,nsmooth=51,
+    maxdist=200.,ztoe=2.4,ni=15,zowp=1.25,nsmooth=51,
     iverbose=True,iplot=True,iprint=True):
     """
     Calculate cross-sectional volumes for barrier island profiles above datum.
@@ -207,6 +207,7 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
         imethod -"extend" or "clip" TODO: check clip code...that code is stale
         dx - profile spacing (m) TODO: check to make sure dx==1 is not assumed
         datum - elevation used as floor to calculate volumes (m) (not same as profile datum)
+        ni=15 - +/- distance to search for dune crest around estimated location (m)
         ztoe=2.4 - elevation for estimating dune toe (m)
         maxdist=200.,,zowp=1.25,nsmooth=51,
         iverbose - "True" produces extra output
@@ -216,6 +217,7 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
     Returns:
         v - volume of profile between first datum and back of island (m2)
         vp - volume of profile between first datum and back of platform (m2)
+        vb - volume of beach portion of the profile (beyond dcrest[0])
         cxcy - x,y pair with centriod location (cross-shore, elevation) (m, m) [misnamed: should be cxcz]
         zmax - highest point in the profile (m)
         dmax - profile distance to highest point (m)
@@ -225,6 +227,7 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
         dtoe - profile distance to first elevation >= ztoe (m)
         width_island - distance from first point above datum to back of island (m)
         width_platform - distance from first point above datum to dback (m)
+        width_beach - distance from first point above datum to dcrest0 (m)
 
     """
     # Colors from colorbrewer...but one more than needed so we can skip the first one (too light)
@@ -241,7 +244,7 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
         fig=plt.figure(figsize=(12,8))
         plt.plot(dist,pfill,':r')
         for i in range(0,nmaps):
-            plt.plot(dist,profs[i,:],'-',c=cols[i+1])
+            plt.plot(dist,profs[i,:],'-')
 
     # make a copy of the unchanged profiles for plotting
     profr = profs.copy()
@@ -298,7 +301,7 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
 
     # determine first point >= datum (do this after fitting profile)
     ixd = np.zeros((nmaps), dtype=int)
-    dshore = np.zeros((nmaps), dtype=np.float)
+    dshore = np.zeros((nmaps), dtype=float)
     for i in range(0,nmaps):
         try:
             ixd[i] = int(np.argwhere((profs[i,:]>=datum))[0])
@@ -345,12 +348,13 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
         if iverbose:
             print("i, zmax, dmax",i, zmax[i], dmax[i])
 
-    # find highest point within 10 meters of estimated dune crest
+    # find highest point within ni meters of estimated dune crest
     idc = np.ones((nmaps),dtype=int)
-    ni = 15
     zcrest0 = np.ones((nmaps))*np.nan
     zcrest = np.ones((nmaps))*np.nan
     dcrest = np.ones((nmaps))*np.nan
+    idcdist = np.ones((nmaps))*np.nan
+    idcdist0 = np.ones((nmaps))*np.nan
     if np.isfinite(dcrest_est) and dcrest_est >= 0:
         idcrest =     int(max(dcrest_est/dx,0.))
         idcrest_min = int(max(idcrest-ni,0))
@@ -360,15 +364,17 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
         for i in range((nmaps)):
             try:
                 idc[i] = int ( np.nanargmax( profs[i,idcrest_min:idcrest_max]) )
-                if i == 0:
-                    idc0 = idc[0]
-                zcrest[i] = profs[i,idc[i]+idcrest-ni]
-                zcrest0[i] = profs[i,idc0+idcrest-ni] # z at location os zmax in first map
-                dcrest[i]  = dist[idc[i]+idcrest-ni]
+                zcrest[i]   = profs[i,idc[i]+idcrest-ni]
+                zcrest0[i]  = profs[i,idc[0]+idcrest-ni] # z at location os zmax in first map
+                dcrest[i]   = dist[idc[i]+idcrest-ni]
+                idcdist[i]  = int(idc[i]+idcrest-ni) # index to dune crest on current map
+                idcdist0[i] = int(idc[0]+idcrest-ni) # index to dune crest on first mat
             except:
+                if (verbose):
+                    print("passing z calcs")
                 pass
             if iverbose:
-                print("idc, zcrest, dcrest",idc[i], zcrest[i], dcrest[i])
+                print("idc, idcdist0, zcrest, zcrest0, dcrest:",idc[i], idcdist0[i], zcrest[i], zcrest0[i], dcrest[i])
 
     # find dune toe as first point >= ztoe
     idt = np.zeros((nmaps), dtype=int)
@@ -383,48 +389,26 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
     if iverbose:
         print("i, dtoe",idt, dtoe)
 
-
-    # find the back of the overwash platform using zowp
-    # this code is no longer used...back of platform now comes in as dback
-    # dowp = np.ones((nmaps))*np.nan
-    # for i in range((nmaps)):
-    #     # smooth the profile
-    #     ps = smooth(np.squeeze(profs[i,:]),nsmooth)
-    #     # find last point >zowp
-    #     # iowp = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=zowp))[-1]
-    #     # iowp = np.squeeze(np.where(ps[int(ix[i]):int(ix[i]+maxdist)]>=zowp))[-1]
-    #     try:
-    #         iowp = np.squeeze(np.where(ps[int(ix[i]):-1]>=zowp))[-1]
-    #         dowp[i] = dist[int(ix[i]+iowp)]
-    #         if iverbose:
-    #             print("i, dowp",i, dowp[i])
-    #     except:
-    #         if iverbose:
-    #             print("i, dowp",i, dowp[i])
-    # # if back of platforn is not found, use half the distance from the crest to the back of the island
-    # if not np.isfinite(dowp[0]):
-    #     if np.isfinite(disl[0]):
-    #         dowp[0] = dmax[0]+0.5*(disl[0]-dmax[0])
-    #     else:
-    #         dowp[0] = dmax[0]
-
-
     # calculate total width of Island
     width_island = np.zeros((nmaps))*np.NaN
     width_platform = np.zeros((nmaps))*np.NaN
+    width_beach = np.zeros((nmaps))*np.NaN
     for i in range((nmaps)):
         try:
             width_island[i] = disl[i]-dist[ixd[i]]
         except:
             pass
         try:
-            # print('dback, ixd[i], dist[ixd[i]]: ',dback, ixd[i], dist[ixd[i]])
             width_platform[i]= dback-dist[ixd[i]]
+        except:
+            pass
+        try:
+            width_beach[i]= dist[int(idcdist0[i])]-dist[ixd[i]]
         except:
             pass
 
         if iverbose:
-            print("width, platform width",width_island[i], width_platform[i])
+            print("width, platform width",width_island[i], width_platform[i], width_beach[i])
 
     # Calculate volumes
     profd = profs.copy()-datum
@@ -437,9 +421,15 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
         vp = np.sum(profd[:,ixd[i]:int(dback/dx)],1)*dx
     except:
         vp = np.NaN
+    try:
+        vb = np.sum(profd[:,ixd[i]:int(idcdist0[i])],1)*dx
+    except:
+        vb = np.NaN
+
     if iverbose:
         print("Island volumes: ", v)
         print('Platform volumes:', vp)
+        print('Beach volumes:', vb)
 
     # Calculate centroids
     cxcy = np.zeros((nmaps,2))
@@ -490,7 +480,7 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
             pfn = 'p_'+title_str+'.png'
             plt.savefig(pfn,format='png',dpi=300)
 
-    return v, vp, cxcy, zmax, dmax, zcrest, dcrest, zcrest0, dtoe, width_island, width_platform
+    return v, vp, vb, cxcy, zmax, dmax, zcrest, dcrest, zcrest0, dtoe, width_island, width_platform, width_beach
 
 
 def running_mean(y, npts):
