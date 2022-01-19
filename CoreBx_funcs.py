@@ -209,7 +209,9 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
         datum - elevation used as floor to calculate volumes (m) (not same as profile datum)
         ni=15 - +/- distance to search for dune crest around estimated location (m)
         ztoe=2.4 - elevation for estimating dune toe (m)
-        maxdist=200.,,zowp=1.25,nsmooth=51,
+        maxdist=200.
+        zowp=1.25
+        nsmooth=51,
         iverbose - "True" produces extra output
         iplot - "True" produces plot
         iprint - "True" saves plot
@@ -321,14 +323,14 @@ def pvol(dist,profs,pfill,dcrest_est,dback,
     for i in range(0,nmaps):
         profs[i,np.isnan(profs[i,:])]=0.
 
-    # find the back of the island using datum
+    # find the back of the island using zowp
     iisl = np.zeros((nmaps), dtype=int)
     disl = np.ones((nmaps))*np.nan
     for i in range((nmaps)):
         try:
-            # find last point >= datum
+            # find last point >= zowp
             #iisl = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=datum))[-1]
-            iisl[i] = np.squeeze(np.where(profs[i,int(ix[i]):-1]>=datum))[-1]
+            iisl[i] = np.squeeze(np.where(profs[i,int(ix[i]):-1]>=zowp))[-1]
             disl[i] = dist[int(ix[i]+iisl[i])]
         except:
             pass
