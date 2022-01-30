@@ -6,6 +6,96 @@ from scipy.stats import linregress
 from pyproj import Proj, transform
 import yaml
 
+def find_toe(dist,z,s=0.2,zz=2.4,izero='offshore',iplot=True):
+    """
+    Find the toe of the dune using three algorithms:
+      * Most offshore occurrence of z>=ztoe
+      * Maximum inflection point
+      * Longest chord from reference slope to elevations
+
+    Input:
+      dist = distance along profile (m; no origin necessary)
+      z = elevation profile (m)
+      s = slope of reference line (m/m)
+      zz = elevation of fixed dune toe (m)
+      izero = 'offshore' or 'onshore' - origin of profile: offshore indicates profile distances increase shoreward
+
+    Returns:
+      izz - index of toe using fixed elevation method (same as input value; m)
+      izc - index of toe using chord method (distance from reference line) (m)
+      izip - index of toe using inflection point (m)
+      zz - elevation of toe using fixed elevation method (same as input value; m)
+      ztoe - elevation of toe using distance from reference line (m)
+      zipt - elevation of toe using inflection point (m)
+
+    Note: assumes maximum z == foredune crest. If not, then pass a shortened transect that only include dune and beach
+    """
+    # initialize return values
+    izz = np.nan
+    izc = np.nan
+    izp = np.nan
+    zz = zz
+    ztoe = np.nan
+    zipt = np.nan
+
+    if izero == 'offshore': #transect goes from offshore to onshore
+        # highest point for offset starting point in offshore segment
+        izmax = np.argmax(z)
+        zb = z[izmax:-1]
+        db = dist[izmax:-1]-dist[izmax]
+
+        # chord method: make a sloping reference line
+        zr = z[izmax] - s*db
+        # find greatest vertical diff between ref line and topography
+        zd = zr-zb
+        izc = np.argmax(zd)
+        zc = zb[izc]
+
+        # inflection point method: find minimum in dz/dx
+        dzb = np.array([0])
+        dzb = np.append(dzb,np.diff(zb)/np.diff(db))
+        # inflection point at (first) minimum dz/dx
+        izip = np.argmin(dzb)
+        zipt = zb[izip]
+
+        # fixed elevation method: find values greater than zz
+        iztall = np.squeeze(np.where(zb>=zz))
+        # chose last one headed offshore
+        izz = iztall[-1]
+
+        # add back in offset
+        izip = izip+izmax
+        izc = izc+izmax
+        izz = izz+izmax
+
+    else: # transect from onshore to offshore
+        # highest point for starting point in offshore segment
+        izmax = np.argmax(z)
+        zb = z[0:izmax]
+        db = dist[0:izmax]
+
+        # chord method: make a sloping reference line
+        zr = z[izmax] - s*np.flip(db)
+        # find greatest vertical diff between ref line and topography
+        zd = zr-zb
+        izc = np.argmax(zd)
+        zc = zb[izc]
+
+        # inflection point method: find minimum in dz/dx
+        dzb = np.array([0])
+        dzb = -np.append(dzb,np.diff(zb)/np.diff(db))
+        # inflection point at (first) minimum dz/dx
+        izip = np.argmin(dzb)
+        zipt = zb[izip]
+
+        # fixed elevation method: find values greater than zz
+        iztall = np.squeeze(np.where(zb>=zz))
+        # chose last one headed offshore
+        izz = iztall[0]
+
+    return izz,izc,izip,zz,zc,zipt
+
+
 def calcR2(H,T,slope,igflag=0):
     """
     %
@@ -378,18 +468,24 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
             if iverbose:
                 print("idc, idcdist0, zcrest, zcrest0, dcrest:",idc[i], idcdist0[i], zcrest[i], zcrest0[i], dcrest[i])
 
-    # find dune toe as first point >= ztoe
-    idt = np.zeros((nmaps), dtype=int)
-    dtoe = np.ones((nmaps))*np.nan
-    for i in range((nmaps)):
-        try:
-            # have to squeeze because where returns (0,n). Want first one, so [0]
-            idt[i] = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=ztoe))[0]
-            dtoe[i] = dist[int(ix[i]+idt[i])]
-        except:
-            pass
-    if iverbose:
-        print("i, dtoe",idt, dtoe)
+    # find the dune toe three diff. ways
+    izz = np.zeros((nmaps), dtype=int)
+    dtoe_zz = np.ones((nmaps))*np.nan
+    izc = np.zeros((nmaps), dtype=int)
+    ztoe_zc = np.ones((nmaps))*np.nan
+    dtoe_zc = np.ones((nmaps))*np.nan
+    izip = np.zeros((nmaps), dtype=int)
+    ztoe_zzip = np.ones((nmaps))*np.nan
+    dtoe_zzip = np.ones((nmaps))*np.nan
+
+    for i in range(((nmaps))):
+
+        izz[i],izc[i],izip[i],zz,ztoe_zc[i],ztoe_zzip[i] = \
+            find_toe( dist[int(ix[i]):int(ix[i]+maxdist)], np.squeeze( profs[i,int(ix[i]):int(ix[i]+maxdist)] ),\
+            s=0.2,zz=ztoe,izero='offshore',iplot=False)
+        dtoe_zz[i] = dist[int(ix[i]+izz[i])]
+        dtoe_zc[i] = dist[int(ix[i]+izc[i])]
+        dtoe_zzip[i] = dist[int(ix[i]+izip[i])]
 
     # calculate total width of Island
     width_island = np.zeros((nmaps))*np.NaN
@@ -432,6 +528,7 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
         print("Island volumes: ", v)
         print('Platform volumes:', vp)
         print('Beach volumes:', vb)
+        print('Shapes:',np.shape(v),np.shape(vp),np.shape(vb),np.shape(zmax),np.shape(dmax))
 
     # Calculate centroids
     cxcy = np.zeros((nmaps,2))
@@ -460,8 +557,8 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
             plt.plot(dmax[i],zmax[i],'or',ms=12)
             plt.plot(dmax[i],zmax[i],'o',c=cols[i])
         for i in range(0,4):
-            plt.plot(dtoe[i],ztoe,'ob',ms=12)
-            plt.plot(dtoe[i],ztoe,'o',c=cols[i])
+            plt.plot(dtoe_zc[i],ztoe_zc[i],'ob',ms=12)
+            plt.plot(dtoe_zc[i],ztoe_zc[i],'o',c=cols[i])
         for i in range(0,4):
             plt.plot(dist[ixd[i]],datum,'vr',ms=12)
             plt.plot(dist[ixd[i]],datum,'v',c=cols[i])
@@ -482,7 +579,7 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
             pfn = 'p_'+title_str+'.png'
             plt.savefig(pfn,format='png',dpi=300)
 
-    return v, vp, vb, cxcy, zmax, dmax, zcrest, dcrest, zcrest0, dtoe, width_island, width_platform, width_beach
+    return v, vp, vb, cxcy, zmax, dmax, zcrest, dcrest, zcrest0, dtoe_zc, ztoe_zc, width_island, width_platform, width_beach
 
 
 def running_mean(y, npts):
