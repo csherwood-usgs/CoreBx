@@ -1,12 +1,12 @@
+# pylint: disable=C0103
 import numpy as np
 import matplotlib.pyplot as plt
-import xarray as xr
 from scipy import interpolate, signal
 from scipy.stats import linregress
 from pyproj import Proj, transform
 import yaml
 
-def find_toe(dist,z,s=0.2,zz=2.4,izero='offshore',iplot=True):
+def find_toe(dist,z,s=0.2,zz=2.4,izero='offshore'):
     """
     Find the toe of the dune using three algorithms:
       * Most offshore occurrence of z>=ztoe
@@ -33,9 +33,9 @@ def find_toe(dist,z,s=0.2,zz=2.4,izero='offshore',iplot=True):
     # initialize return values
     izz = np.nan
     izc = np.nan
-    izp = np.nan
-    zz = zz
-    ztoe = np.nan
+    izip = np.nan
+    # zz = zz (will be returned unchanged)
+    zc = np.nan
     zipt = np.nan
 
     if izero == 'offshore': #transect goes from offshore to onshore
@@ -156,7 +156,7 @@ def calcR2(H,T,slope,igflag=0):
 def nanlsfit(x,y):
     """least-squares fit of data with NaNs"""
     ok = ~np.isnan(x) & ~np.isnan(y)
-    n = len(ok[ok==True])
+    n = len(ok(bool(ok)))
     xx = x[ok]
     yy = y[ok]
     slope, intercept, r, p, stderr = linregress(xx,yy)
@@ -326,14 +326,14 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
     cols=['#feedde','#fdbe85','#fd8d3c','#e6550d','#a63603']
 
     nmaps, lp = np.shape(profs)
-    if(iverbose):
+    if iverbose :
         print('dx: ',dx)
         print("nmaps, length profiles: ",nmaps,lp)
         print("Shape of dist: ",np.shape(dist))
         print("Shape of profs: ",np.shape(profs))
         print("Shape of pfill: ",np.shape(pfill))
     if(iverbose and iplot):
-        fig=plt.figure(figsize=(12,8))
+        plt.figure(figsize=(12,8))
         plt.plot(dist,pfill,':r')
         for i in range(0,nmaps):
             plt.plot(dist,profs[i,:],'-')
@@ -353,7 +353,7 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
             ix[i] = 0
 
     # extend the profiles with linear fit or zeros
-    if(imethod == 'extend' ):
+    if imethod == 'extend':
         title_str = title_str+'_extended'
         if iverbose:
             print('extend')
@@ -367,7 +367,7 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
                 if iverbose:
                     print("Slope is: {:.4f}".format(p[0]))
                 # if slope is less than 1:50, replace
-                if(p[0]>0.02):
+                if p[0]>0.02:
                     # if slope is positive, replace NaNs with line
                     profs[i,0:int(ix[i])]=np.polyval(p,dist[0:int(ix[i])])
                 else:
@@ -383,7 +383,7 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
                         profs[i,int(ix[i]+1):int(ix[i]+1+npts)])
                 # fill with zeros
                 profs[i,0:int(ix[i])]=0.
-    elif(imethod == 'clip'):
+    elif imethod == 'clip':
         # truncate the profiles to start at common point (profile w/ least data)
         title_str = title_str+'_clip'
         if iverbose:
@@ -393,7 +393,7 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
 
     # determine first point >= datum (do this after fitting profile)
     ixd = np.zeros((nmaps), dtype=int)
-    dshore = np.zeros((nmaps), dtype=float)
+
     for i in range(0,nmaps):
         try:
             ixd[i] = int(np.argwhere((profs[i,:]>=datum))[0])
@@ -462,9 +462,9 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
                 idcdist[i]  = int(idc[i]+idcrest-ni) # index to dune crest on current map
                 idcdist0[i] = int(idc[0]+idcrest-ni) # index to dune crest on first mat
             except:
-                if (verbose):
+                if iverbose:
                     print("passing z calcs")
-                pass
+
             if iverbose:
                 print("idc, idcdist0, zcrest, zcrest0, dcrest:",idc[i], idcdist0[i], zcrest[i], zcrest0[i], dcrest[i])
 
@@ -480,9 +480,9 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
 
     for i in range(((nmaps))):
 
-        izz[i],izc[i],izip[i],zz,ztoe_zc[i],ztoe_zzip[i] = \
+        izz[i],izc[i],izip[i],_,ztoe_zc[i],ztoe_zzip[i] = \
             find_toe( dist[int(ix[i]):int(ix[i]+maxdist)], np.squeeze( profs[i,int(ix[i]):int(ix[i]+maxdist)] ),\
-            s=0.2,zz=ztoe,izero='offshore',iplot=False)
+            s=0.2,zz=ztoe,izero='offshore')
         dtoe_zz[i] = dist[int(ix[i]+izz[i])]
         dtoe_zc[i] = dist[int(ix[i]+izc[i])]
         dtoe_zzip[i] = dist[int(ix[i]+izip[i])]
@@ -578,8 +578,8 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
         if iprint:
             pfn = 'p_'+title_str+'.png'
             plt.savefig(pfn,format='png',dpi=300)
-
-    return v, vp, vb, cxcy, zmax, dmax, zcrest, dcrest, zcrest0, dtoe_zc, ztoe_zc, width_island, width_platform, width_beach
+    return v, vp, vb, cxcy, zmax, dmax, zcrest, dcrest,\
+        zcrest0, dtoe_zc, ztoe_zc, width_island, width_platform, width_beach
 
 
 def running_mean(y, npts):
@@ -596,6 +596,7 @@ def running_mean(y, npts):
     box = np.ones(npts)/npts
     ys = np.convolve(y, box, mode='same')
     return ys
+
 
 def running_nanmean(y, npts):
     '''
@@ -617,6 +618,7 @@ def running_nanmean(y, npts):
     sy[nclip:-nclip] = np.nanmean(y2D,1)
     return sy
 
+
 def running_nanmin(y, npts):
     '''
     Smooth a 1-d array with a moving minimum
@@ -636,6 +638,7 @@ def running_nanmin(y, npts):
     # print(nclip)
     sy[nclip:-nclip] = np.nanmin(y2D,1)
     return sy
+
 
 def running_stddev(y, npts):
     """
@@ -658,10 +661,12 @@ def running_stddev(y, npts):
     sy[nclip:-nclip] = np.nanstd(y2D,1)
     return sy
 
+
 def centroid(x,z):
     cz = np.nanmean(z)
     cx = np.nansum(z*x)/np.nansum(z)
     return(cx,cz)
+
 
 def make_grid(name=None,e0=None,n0=None,xlen=None,ylen=None,dxdy=None,theta=None):
     """
@@ -712,7 +717,7 @@ def box2UTMh(x, y, x0, y0, theta):
         x0, y0 - Offset (location of x, y = (0,0) in new coordinate system)
         theta - Angle of rotation (degrees, CCW from x-axis == Cartesian coorinates)
     Returns:
-        xr, yr - rotated, offset coordinates
+        x_r, y_r - rotated, offset coordinates
     '''
     thetar = np.radians(theta)
     c, s = np.cos(thetar), np.sin(thetar)
@@ -731,9 +736,10 @@ def box2UTMh(x, y, x0, y0, theta):
 
     # perform rotation and translation
     xyrh=np.matmul(np.matmul(Th,Rh),xyh)
-    xr = xyrh[0,:]
-    yr = xyrh[1,:]
-    return xr, yr
+    x_r = xyrh[0,:]
+    y_r = xyrh[1,:]
+    return x_r, y_r
+
 
 def pcoord(x, y):
     """
@@ -741,10 +747,11 @@ def pcoord(x, y):
     r,az = pcoord(x, y)
     """
     r  = np.sqrt( x**2 + y**2 )
-    az=np.degrees( np.arctan2(x, y) )
+    az = np.degrees( np.arctan2(x, y) )
     # az[where(az<0.)[0]] += 360.
     az = (az+360.)%360.
     return r, az
+
 
 def xycoord(r, az):
     """
@@ -755,15 +762,17 @@ def xycoord(r, az):
     y = r * np.cos(np.radians(az))
     return x, y
 
+
 def UTM2Island(eutm, nutm, eoff=378489.45785127, noff=3855740.50113774, rot=42.):
     """
     Convert UTM NAD83 Zone 18N easting, northing to N. Core Banks alongshore, cross-shore coordinates
     xisl, yisl = UTM2Island( eutm, nutm )
     """
     [r,az]=pcoord(eutm-eoff,nutm-noff)
-    az = az+rot;
+    az = az+rot
     [xisl,yisl]=xycoord(r,az)
     return xisl, yisl
+
 
 def LatLon2UTM(lat,lon,initepsg='epsg:26918'):
     """
@@ -774,8 +783,9 @@ def LatLon2UTM(lat,lon,initepsg='epsg:26918'):
     """
     inProj = Proj(init='epsg:4326')
     outProj = Proj(init=initepsg)
-    outx,outy=transform(inProj,outProj,lon,lat)
+    outx,outy = transform(inProj,outProj,lon,lat)
     return outx, outy
+
 
 def UTM2LatLon(easting,northing,initepsg='epsg:26918'):
     """
@@ -786,8 +796,9 @@ def UTM2LatLon(easting,northing,initepsg='epsg:26918'):
     """
     outProj = Proj(init='epsg:4326')
     inProj = Proj(init=initepsg)
-    lon,lat=transform(inProj,outProj,easting,northing)
+    lon,lat = transform(inProj,outProj,easting,northing)
     return lon, lat
+
 
 def UTM2rot(xutm,yutm,r):
     """
@@ -808,6 +819,7 @@ def UTM2rot(xutm,yutm,r):
     yb = np.concatenate(ybl).ravel()
     return xb, yb
 
+
 def yaml2dict(yamlfile):
     """Import contents of a YAML file as a dict
 
@@ -824,10 +836,11 @@ def yaml2dict(yamlfile):
     with open(yamlfile, "r") as infile:
         try:
             dictname = yaml.safe_load(infile)
-        except yaml.YAMLerror as exc:
+        except yaml.YAMLError as exc:
             print(exc)
 
     return dictname
+
 
 def map_stats(mp,sfile):
     '''
@@ -842,8 +855,8 @@ def map_stats(mp,sfile):
     num = []
     numn = []
     for i in range(s[0]):
-       num.append(mp[i,:,:].size)
-       numn.append(np.count_nonzero(np.isnan(mp[i,:,:])))
+        num.append(mp[i,:,:].size)
+        numn.append(np.count_nonzero(np.isnan(mp[i,:,:])))
     print("Shape: ",s,file=sfile)
     print("mean",mean,file=sfile)
     print("mad",mad,file=sfile)
@@ -853,6 +866,7 @@ def map_stats(mp,sfile):
     print("nans",numn,file=sfile)
     print("size",num,file=sfile)
     return mean, mad
+
 
 def map_stats2d(mp,sfile):
     '''
