@@ -6,12 +6,15 @@ from scipy.stats import linregress
 from pyproj import Proj, transform
 import yaml
 
-def find_toe(dist,z,s=0.2,zz=2.4,izero='offshore'):
+def find_toe(dist, z, s=0.05, zz=2.4, izero='offshore', debug=False):
     """
     Find the toe of the dune using three algorithms:
       * Most offshore occurrence of z>=ztoe
       * Maximum inflection point
       * Longest chord from reference slope to elevations
+
+    The input profile should not extend much beyond the primary dune line,
+    and the highest point should be the primary dune crest.
 
     Input:
       dist = distance along profile (m; no origin necessary)
@@ -28,78 +31,115 @@ def find_toe(dist,z,s=0.2,zz=2.4,izero='offshore'):
       ztoe - elevation of toe using distance from reference line (m)
       zipt - elevation of toe using inflection point (m)
 
-    Note: assumes maximum z == foredune crest. If not, then pass a shortened transect that only include dune and beach
     """
-    # initialize return values
-    izz = np.nan
-    izc = np.nan
-    izip = np.nan
-    # zz = zz (will be returned unchanged)
-    zc = np.nan
-    zipt = np.nan
 
-    if izero == 'offshore': #transect goes from offshore to onshore
-        # highest point for offset starting point in offshore segment
-        izmax = np.argmax(z)
-        zb = z[izmax:-1]
-        db = dist[izmax:-1]-dist[izmax]
+    # how many nans in profile?
+    nan_frac = np.sum(np.isnan(z))/len(z)
+    if debug:
+        print('nan_frac: ', nan_frac)
 
-        # chord method: make a sloping reference line
-        zr = z[izmax] - s*db
-        # find greatest vertical diff between ref line and topography
-        zd = zr-zb
-        izc = np.argmax(zd)
-        zc = zb[izc]
+    # only process if at least 10% data
+    if nan_frac < 0.9:
+        zsmooth = running_mean(z, 7)
 
-        # inflection point method: find minimum in dz/dx
-        dzb = np.array([0])
-        dzb = np.append(dzb,np.diff(zb)/np.diff(db))
-        # inflection point at (first) minimum dz/dx
-        izip = np.argmin(dzb)
-        zipt = zb[izip]
+        if izero == 'offshore':  # transect goes from offshore to onshore
+            # highest point for offset starting point in offshore segment
+            izmax = np.nanargmax(zsmooth)
+            zb = zsmooth[0:izmax]
+            db = dist[0:izmax]-dist[izmax]
 
-        # fixed elevation method: find values greater than zz
-        iztall = np.squeeze(np.where(zb>=zz))
-        # chose last one headed offshore
-        izz = iztall[-1]
+            # chord method: make a sloping reference line
+            zr = z[izmax] + s*db
+            # find greatest vertical diff between ref line and topography
+            try:
+                izc = np.nanargmax((zr-zb))
+                zc = zb[izc]
+                dzc = dist[izc]
+            except:
+                izc = 0
+                zc = np.nan
+                dzc = np.nan
 
-        # add back in offset
-        izip = izip+izmax
-        izc = izc+izmax
-        izz = izz+izmax
+            # inflection point method: find minimum in smoothed dz/dx
+            dz2dx = np.diff(zb, 2)
+            # inflection point at (first) minimum dz2/dx
+            try:
+                izip = np.nanargmax(dz2dx)+2
+                zipt = z[izip]
+                dipt = dist[izip]
+            except:
+                izip = 0
+                zipt = np.nan
+                dipt = np.nan
 
-    else: # transect from onshore to offshore
-        # highest point for starting point in offshore segment
-        izmax = np.argmax(z)
-        zb = z[0:izmax]
-        db = dist[0:izmax]
+            # fixed elevation method: find values greater than zz
+            # chose first one headed onshore
+            try:
+                izz = np.squeeze(np.where(zb >= zz))[0]
+                zz = z[izz]
+                dzz = dist[izz]
+            except:
+                izz = 0
+                zz = np.nan
+                dzz = np.nan
 
-        # chord method: make a sloping reference line
-        zr = z[izmax] - s*np.flip(db)
-        # find greatest vertical diff between ref line and topography
-        zd = zr-zb
-        izc = np.argmax(zd)
-        zc = zb[izc]
+            if debug:
+                print('offshore')
+                print('izmax=', izmax, 'dist=', dist[izmax], 'elev=', z[izmax])
+                print('izc=', izc, 'dist=', dzc, 'elev=', zc)
+                print('izip=', izip, 'dist=', dipt, 'elev=', zipt)
+                print('izz=', izz, 'dist=', dzz, 'elev=',zz)
 
-        # inflection point method: find minimum in dz/dx
-        dzb = np.array([0])
-        dzb = -np.append(dzb,np.diff(zb)/np.diff(db))
-        # inflection point at (first) minimum dz/dx
-        izip = np.argmin(dzb)
-        zipt = zb[izip]
+                fig,ax = plt.subplots(nrows=1, ncols=3)
+                ax[0].plot(dist, z)
+                ax[0].plot(dzc, zc, 'o', label='chord')
+                ax[0].plot(dipt, zipt, 'o', label='inflec. pt.')
+                ax[0].plot(dzz, zz, 'o',label='fixed z.')
+                ax[0].legend()
 
-        # fixed elevation method: find values greater than zz
-        iztall = np.squeeze(np.where(zb>=zz))
-        # chose last one headed offshore
-        izz = iztall[0]
+                ax[1].plot(db, zr)
+                ax[1].plot(db, zb)
+                ax[1].plot(db[izc], zc, 'o')
+                # ax[1].invert_xaxis()
+                ax[1].set_ylim([-1, 7])
 
-    return izz,izc,izip,zz,zc,zipt
+                ax[2].plot(dist[2:izmax], dz2dx)
+
+        else: # transect from onshore to offshore
+            # This has not been tested
+            # highest point for starting point in offshore segment
+            if debug:
+                print('onshore')
+            izmax = np.argmax(zsmooth)
+            zb = zsmooth[0:izmax]
+            db = dist[0:izmax]
+
+            # chord method: make a sloping reference line
+            zr = z[izmax] - s*np.flip(db)
+            # find greatest vertical diff between ref line and topography
+            zd = zr-zb
+            izc = np.argmax(zd)
+            zc = zb[izc]
+
+            # inflection point method: find minimum in dz/dx
+            dzb = np.array([0])
+            dzb = -np.append(dzb, np.diff(zb)/np.diff(db))
+            # inflection point at (first) minimum dz/dx
+            izip = np.argmin(dzb)
+            zipt = zb[izip]
+
+            # fixed elevation method: find values greater than zz
+            iztall = np.squeeze(np.where(zb >= zz))
+            # chose last one headed offshore
+            izz = iztall[0]
+
+    return izz, izc, izip, zz, zc, zipt
 
 
-def calcR2(H,T,slope,igflag=0):
+def calcR2(H, T, slope, igflag=0):
     """
     %
-    % [R2,S,setup, Sinc, SIG, ir] = calcR2(H,T,slope,igflag);
+    % [R2, S, setup,  Sinc,  SIG,  ir] = calcR2(H, T, slope, igflag);
     %
     % Calculated 2% runup (R2), swash (S), setup (setup), incident swash (Sinc)
     % and infragravity swash (SIG) elevations based on parameterizations from runup paper
@@ -153,17 +193,19 @@ def calcR2(H,T,slope,igflag=0):
 
     return R2, S, setup, Sinc, SIG, ir, R16
 
-def nanlsfit(x,y):
+
+def nanlsfit(x, y):
     """least-squares fit of data with NaNs"""
     ok = ~np.isnan(x) & ~np.isnan(y)
     n = len(ok(bool(ok)))
     xx = x[ok]
     yy = y[ok]
-    slope, intercept, r, p, stderr = linregress(xx,yy)
+    slope, intercept, r, p, stderr = linregress(xx, yy)
     print("n={}; slope, intercept= {:.4f},{:.4f}; r={:.4f} p={:.4f}, stderr={:.4f} ".format(n, slope, intercept, r, p, stderr))
     return n, slope, intercept, r, p, stderr
 
-def stat_summary(x,iprint=False):
+
+def stat_summary(x, iprint=False):
     n = len(x)
     nnan = np.sum(np.isnan(x))
     nvalid = n-nnan
@@ -173,39 +215,39 @@ def stat_summary(x,iprint=False):
         meanx = np.nanmean(x)
         stdx = np.nanstd(x)
         minx = np.nanmin(x)
-        d5 = np.nanpercentile(x,5.)
-        d25 = np.nanpercentile(x,25.)
-        d50 = np.nanpercentile(x,50.)
-        d75 = np.nanpercentile(x,75.)
-        d95 = np.nanpercentile(x,95.)
+        d5 = np.nanpercentile(x, 5.)
+        d25 = np.nanpercentile(x, 25.)
+        d50 = np.nanpercentile(x, 50.)
+        d75 = np.nanpercentile(x, 75.)
+        d95 = np.nanpercentile(x, 95.)
         maxx = np.nanmax(x)
     else:
-        meanx = np.NaN
-        stdx = np.NaN
-        minx = np.NaN
-        d5   = np.NaN
-        d25 = np.NaN
-        d50 = np.NaN
-        d75 = np.NaN
-        d95 = np.NaN
-        maxx = np.NaN
+        meanx = np.nan
+        stdx = np.nan
+        minx = np.nan
+        d5 = np.nan
+        d25 = np.nan
+        d50 = np.nan
+        d75 = np.nan
+        d95 = np.nan
+        maxx = np.nan
 
     # return it in a dict
-    s = {'n':n,'nnan':nnan,'nvalid':nvalid,'mean':meanx,'std':stdx,'min':minx,'max':maxx,\
-         'd5':d5,'d25':d25,'d50':d50,'d75':d75,'d95':d95}
+    s = {'n':n, 'nnan':nnan, 'nvalid':nvalid, 'mean':meanx, 'std':stdx, 'min':minx, 'max':maxx,
+         'd5':d5, 'd25':d25, 'd50':d50, 'd75':d75, 'd95':d95}
     # if iprint:
-    #     for key,value in s.items():
-    #         print('{:6s} = {:.3f}'.format(key,value)),
+    #     for key, value in s.items():
+    #         print('{:6s} = {:.3f}'.format(key, value)),
     if iprint:
         print("  n, nnan, nvalid: ",s['n'],s['nnan'],s['nvalid'])
-        print("  mean, std, min, max   : {:.3f} {:.3f} {:.3f} {:.3f}".\
-        format(s['mean'],s['std'],s['min'],s['max']))
-        print("  d5, d25, d50, d75, d95: {:.3f} {:.3f} {:.3f} {:.3f} {:.3f}".\
-        format(s['d5'],s['d25'],s['d50'],s['d75'],s['d95']))
+        print("  mean, std, min, max   : {:.3f} {:.3f} {:.3f} {:.3f}"
+            .format(s['mean'], s['std'], s['min'], s['max']))
+        print("  d5, d25, d50, d75, d95: {:.3f} {:.3f} {:.3f} {:.3f} {:.3f}"
+            .format(s['d5'], s['d25'], s['d50'], s['d75'], s['d95']))
 
     return s
 
-def analyze_channels(x,diff,dx=1.,vthresh=0.5):
+def analyze_channels(x, diff, dx=1., vthresh=0.5):
     """
     Calculate channel data from alongshore difference vector
 
@@ -220,10 +262,10 @@ def analyze_channels(x,diff,dx=1.,vthresh=0.5):
 
     """
     # sumple calculation of channel area
-    diff[diff <= vthresh]=0.
+    diff[diff <= vthresh] = 0.
     chana = np.cumsum(diff)*dx
     dlength = len(diff)*dx
-    print('Total channel area m^2/m: {:.2f}'.format(chana[-1]/dlength) )
+    print('Total channel area m^2/m: {:.2f}'.format(chana[-1]/dlength))
 
     nc = 0
     channel_strt = np.array([])
@@ -238,30 +280,30 @@ def analyze_channels(x,diff,dx=1.,vthresh=0.5):
         if i == 0:
             if z >= vthresh:
                 # handle first points
-                run=True
+                run = True
                 nc = nc+1
-                channel_strt = np.append( channel_strt, x[i] )
-                channel_width = np.append( channel_width, dx )
-                channel_max_depth = np.append( channel_max_depth, z)
-                channel_avg_depth = np.append( channel_avg_depth, z)
-                channel_area = np.append( channel_area, z*dx )
+                channel_strt = np.append(channel_strt, x[i])
+                channel_width = np.append(channel_width, dx)
+                channel_max_depth = np.append(channel_max_depth, z)
+                channel_avg_depth = np.append(channel_avg_depth, z)
+                channel_area = np.append(channel_area, z*dx)
                 channel_sum_depth = z
         else:
             if z >= vthresh and run is False:
                 # start new channel
                 run = True
-                nc = nc+1
-                channel_strt = np.append( channel_strt, x[i] )
-                channel_width = np.append( channel_width, dx )
-                channel_max_depth = np.append( channel_max_depth, z)
-                channel_avg_depth = np.append( channel_avg_depth, z)
-                channel_area = np.append( channel_area, z*dx )
+                nc = nc + 1
+                channel_strt = np.append(channel_strt, x[i] )
+                channel_width = np.append(channel_width, dx )
+                channel_max_depth = np.append(channel_max_depth, z)
+                channel_avg_depth = np.append(channel_avg_depth, z)
+                channel_area = np.append(channel_area, z*dx)
                 channel_sum_depth = z
             elif z >= vthresh and run is True:
                 # update existing channel
                 run = True
                 channel_width[nc-1] = channel_width[nc-1]+dx
-                channel_max_depth[nc-1] = np.max( (channel_max_depth[nc-1], z) )
+                channel_max_depth[nc-1] = np.max( (channel_max_depth[nc-1], z))
                 channel_sum_depth = channel_sum_depth + z
                 channel_avg_depth[nc-1] = channel_sum_depth/(channel_width[nc-1]/dx)
                 channel_area[nc-1] = channel_avg_depth[nc-1]*channel_width[nc-1]
@@ -273,12 +315,12 @@ def analyze_channels(x,diff,dx=1.,vthresh=0.5):
     return nc, channel_ctr, channel_area, channel_width, channel_max_depth, channel_avg_depth
 
 
-def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
-    title_str,pnames,imethod='extend',
-    dx = 1.,
-    datum=0.4,
-    maxdist=200.,ztoe=2.4,ni=15,zowp=1.25,nsmooth=51,
-    iverbose=True,iplot=True,iprint=True):
+def pvol(dist, profs, pfill, dcrest_est, dback,
+        title_str, pnames, imethod='extend',
+        dx = 1.,
+        datum=0.4,
+        maxdist=200., ztoe=2.4, ni=15, zowp=1.25, nsmooth=51,
+        iverbose=True, iplot=True, iprint=True):
     """
     Calculate cross-sectional volumes for barrier island profiles above datum.
     Assumes distance increases from offshore landward, but plots with ocean to right.
@@ -323,31 +365,31 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
 
     """
     # Colors from colorbrewer...but one more than needed so we can skip the first one (too light)
-    cols=['#feedde','#fdbe85','#fd8d3c','#e6550d','#a63603']
+    cols = ['#feedde', '#fdbe85', '#fd8d3c', '#e6550d', '#a63603']
 
     nmaps, lp = np.shape(profs)
-    if iverbose :
-        print('dx: ',dx)
-        print("nmaps, length profiles: ",nmaps,lp)
-        print("Shape of dist: ",np.shape(dist))
-        print("Shape of profs: ",np.shape(profs))
-        print("Shape of pfill: ",np.shape(pfill))
+    if iverbose:
+        print('dx: ', dx)
+        print("nmaps, length profiles: ", nmaps, lp)
+        print("Shape of dist: ", np.shape(dist))
+        print("Shape of profs: ", np.shape(profs))
+        print("Shape of pfill: ", np.shape(pfill))
     if(iverbose and iplot):
-        plt.figure(figsize=(12,8))
-        plt.plot(dist,pfill,':r')
-        for i in range(0,nmaps):
-            plt.plot(dist,profs[i,:],'-')
+        plt.figure(figsize=(12, 8))
+        plt.plot(dist, pfill, ':r')
+        for i in range(0, nmaps):
+            plt.plot(dist, profs[i, :], '-')
 
     # make a copy of the unchanged profiles for plotting
     profr = profs.copy()
 
     # find first good value in smoothed profile (do this before fitting profile or filling)
     ix = np.zeros((nmaps), dtype=int)
-    for i in range(0,nmaps):
+    for i in range(0, nmaps):
         try:
             ix[i] = int(np.argwhere(np.isfinite(psmooth[i,:]))[0])
             if iverbose:
-                print(i,ix[i],psmooth[i,ix[i]-3:ix[i]+3])
+                print(i, ix[i], psmooth[i, ix[i]-3:ix[i]+3])
         except:
             # fails because entire profile is NaN
             ix[i] = 0
@@ -362,43 +404,43 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
         for i in range((nmaps)):
             try:
                 # Not sure why one of these breaks down in
-                p = np.polyfit( dist[int(ix[i]+1):int(ix[i]+1+npts)],\
-                    profs[i,int(ix[i]+1):int(ix[i]+1+npts)],1)
+                p = np.polyfit( dist[int(ix[i]+1):int(ix[i]+1+npts)],
+                        profs[i, int(ix[i]+1):int(ix[i]+1+npts)], 1)
                 if iverbose:
                     print("Slope is: {:.4f}".format(p[0]))
                 # if slope is less than 1:50, replace
-                if p[0]>0.02:
+                if p[0] > 0.02:
                     # if slope is positive, replace NaNs with line
-                    profs[i,0:int(ix[i])]=np.polyval(p,dist[0:int(ix[i])])
+                    profs[i, 0:int(ix[i])] = np.polyval(p, dist[0:int(ix[i])])
                 else:
                     # if slope is not positive, replace NaNs with zeros
-                    profs[i,0:int(ix[i])]=0.
+                    profs[i, 0:int(ix[i])] = 0.
                     # print("warning: replacing slope of {:.4f} with {:.4f}".format(p[0],0.02))
                     # p[0]=0.02
                     # profs[i,0:int(ix[i])]=np.polyval(p,dist[0:int(ix[i])])
             except:
                 if iverbose:
                     print('cant calculate slope')
-                    print('dist, profs',dist[int(ix[i]+1):int(ix[i]+1+npts)],\
-                        profs[i,int(ix[i]+1):int(ix[i]+1+npts)])
+                    print('dist, profs', dist[int(ix[i]+1):int(ix[i]+1+npts)],
+                            profs[i, int(ix[i]+1):int(ix[i]+1+npts)])
                 # fill with zeros
-                profs[i,0:int(ix[i])]=0.
+                profs[i, 0:int(ix[i])] = 0.
     elif imethod == 'clip':
         # truncate the profiles to start at common point (profile w/ least data)
-        title_str = title_str+'_clip'
+        title_str = title_str + '_clip'
         if iverbose:
             print('clipped')
         imx = int(np.max(ix))
-        profs[:,0:imx]=0.
+        profs[:, 0:imx] = 0.
 
     # determine first point >= datum (do this after fitting profile)
     ixd = np.zeros((nmaps), dtype=int)
 
-    for i in range(0,nmaps):
+    for i in range(0, nmaps):
         try:
             ixd[i] = int(np.argwhere((profs[i,:]>=datum))[0])
             if iverbose:
-                print(i,ix[i],profs[i,ixd[i]-3:ixd[i]+3])
+                print(i, ix[i], profs[i,ixd[i]-3:ixd[i]+3])
         except:
             # fails because entire profile is NaN
             ixd[i] = 0
@@ -410,7 +452,7 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
         profs[i,idx]=pfill[idx]
 
     # replace any other NaNs with zero
-    for i in range(0,nmaps):
+    for i in range(0, nmaps):
         profs[i,np.isnan(profs[i,:])]=0.
 
     # find the back of the island using zowp
@@ -420,19 +462,19 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
         try:
             # find last point >= zowp
             #iisl = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=datum))[-1]
-            iisl[i] = np.squeeze(np.where(profs[i,int(ix[i]):-1]>=zowp))[-1]
-            disl[i] = dist[int(ix[i]+iisl[i])]
+            iisl[i] = np.squeeze(np.where(profs[i,int(ix[i]):-1] >= zowp))[-1]
+            disl[i] = dist[int(ix[i] + iisl[i])]
         except:
             pass
         if iverbose:
-            print("iisl, disl",iisl[i], disl[i])
+            print("iisl, disl", iisl[i], disl[i])
 
     # find the highest point in the profile
     zmax = np.ones((nmaps))*np.nan
     dmax = np.ones((nmaps))*np.nan
     for i in range((nmaps)):
         try:
-            imxh = int ( np.nanargmax(profs[i,:]) )
+            imxh = int (np.nanargmax(profs[i,:]))
             zmax[i] = profs[i,imxh]
             dmax[i] = dist[imxh]
         except:
@@ -441,67 +483,74 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
             print("i, zmax, dmax",i, zmax[i], dmax[i])
 
     # find highest point within ni meters of estimated dune crest
-    idc = np.ones((nmaps),dtype=int)
+    idc = np.ones((nmaps), dtype=int)
     zcrest0 = np.ones((nmaps))*np.nan
     zcrest = np.ones((nmaps))*np.nan
     dcrest = np.ones((nmaps))*np.nan
     idcdist = np.ones((nmaps))*np.nan
     idcdist0 = np.ones((nmaps))*np.nan
     if np.isfinite(dcrest_est) and dcrest_est >= 0:
-        idcrest =     int(max(dcrest_est/dx,0.))
-        idcrest_min = int(max(idcrest-ni,0))
-        idcrest_max = int(min(idcrest+ni,lp))
+        idcrest = int(max(dcrest_est/dx, 0.))
+        idcrest_min = int(max(idcrest-ni, 0))
+        idcrest_max = int(min(idcrest+ni, lp))
         if iverbose:
             print('dcrest_est, idcrest: ',dcrest_est, idcrest)
         for i in range((nmaps)):
             try:
-                idc[i] = int ( np.nanargmax( profs[i,idcrest_min:idcrest_max]) )
-                zcrest[i]   = profs[i,idc[i]+idcrest-ni]
-                zcrest0[i]  = profs[i,idc[0]+idcrest-ni] # z at location os zmax in first map
-                dcrest[i]   = dist[idc[i]+idcrest-ni]
-                idcdist[i]  = int(idc[i]+idcrest-ni) # index to dune crest on current map
-                idcdist0[i] = int(idc[0]+idcrest-ni) # index to dune crest on first mat
+                idc[i] = int(np.nanargmax( profs[i,idcrest_min:idcrest_max]))
+                zcrest[i] = profs[i,idc[i]+idcrest-ni]
+                zcrest0[i] = profs[i,idc[0]+idcrest-ni]  # z at location os zmax in first map
+                dcrest[i] = dist[idc[i]+idcrest-ni]
+                idcdist[i] = int(idc[i]+idcrest-ni)  # index to dune crest on current map
+                idcdist0[i] = int(idc[0]+idcrest-ni)  # index to dune crest on first mat
             except:
                 if iverbose:
                     print("passing z calcs")
 
             if iverbose:
-                print("idc, idcdist0, zcrest, zcrest0, dcrest:",idc[i], idcdist0[i], zcrest[i], zcrest0[i], dcrest[i])
+                print("idc, idcdist0, zcrest, zcrest0, dcrest:", idc[i], idcdist0[i], zcrest[i], zcrest0[i], dcrest[i])
 
     # find the dune toe three diff. ways
     izz = np.zeros((nmaps), dtype=int)
+    ztoe_zz = np.ones((nmaps))*np.nan
     dtoe_zz = np.ones((nmaps))*np.nan
     izc = np.zeros((nmaps), dtype=int)
     ztoe_zc = np.ones((nmaps))*np.nan
     dtoe_zc = np.ones((nmaps))*np.nan
-    izip = np.zeros((nmaps), dtype=int)
-    ztoe_zzip = np.ones((nmaps))*np.nan
-    dtoe_zzip = np.ones((nmaps))*np.nan
+    iip = np.zeros((nmaps), dtype=int)
+    ztoe_ip = np.ones((nmaps))*np.nan
+    dtoe_ip = np.ones((nmaps))*np.nan
 
     for i in range(((nmaps))):
-
-        izz[i],izc[i],izip[i],_,ztoe_zc[i],ztoe_zzip[i] = \
-            find_toe( dist[int(ix[i]):int(ix[i]+maxdist)], np.squeeze( profs[i,int(ix[i]):int(ix[i]+maxdist)] ),\
-            s=0.2,zz=ztoe,izero='offshore')
-        dtoe_zz[i] = dist[int(ix[i]+izz[i])]
-        dtoe_zc[i] = dist[int(ix[i]+izc[i])]
-        dtoe_zzip[i] = dist[int(ix[i]+izip[i])]
+        izz[i],izc[i],iip[i],ztoe_zz[i],ztoe_zc[i],ztoe_ip[i] = \
+            find_toe(dist[int(ix[i]):int(ix[i]+maxdist)], np.squeeze(profs[i,int(ix[i]):int(ix[i]+maxdist)]),
+                s=0.05, zz=ztoe, izero='offshore')
+        dtoe_zz[i] = dist[int(ix[i] + izz[i])]
+        dtoe_zc[i] = dist[int(ix[i] + izc[i])]
+        dtoe_ip[i] = dist[int(ix[i] + iip[i])]
+    if iverbose:
+        print('dtoe_zz:',dtoe_zz)
+        print('dtoe_zc:',dtoe_zc)
+        print('dtoe_ip:',dtoe_ip)
+        print('ztoe_zz:',ztoe_zz)
+        print('ztoe_zc:',ztoe_zc)
+        print('ztoe_ip:',ztoe_ip)
 
     # calculate total width of Island
-    width_island = np.zeros((nmaps))*np.NaN
-    width_platform = np.zeros((nmaps))*np.NaN
-    width_beach = np.zeros((nmaps))*np.NaN
+    width_island = np.zeros((nmaps))*np.nan
+    width_platform = np.zeros((nmaps))*np.nan
+    width_beach = np.zeros((nmaps))*np.nan
     for i in range((nmaps)):
         try:
             width_island[i] = disl[i]-dist[ixd[i]]
         except:
             pass
         try:
-            width_platform[i]= dback-dist[ixd[i]]
+            width_platform[i] = dback-dist[ixd[i]]
         except:
             pass
         try:
-            width_beach[i]= dist[int(idcdist0[i])]-dist[ixd[i]]
+            width_beach[i] = dist[int(idcdist0[i])]-dist[ixd[i]]
         except:
             pass
 
@@ -510,42 +559,42 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
 
     # Calculate volumes
     profd = profs.copy()-datum
-    profd[np.where(profd<=0.)]=0.
+    profd[np.where(profd <= 0.)] = 0.
     try:
-        v = np.sum(profd,1)*dx
+        v = np.sum(profd, 1)*dx
     except:
-        v = np.NaN
+        v = np.nan
     try:
-        vp = np.sum(profd[:,ixd[i]:int(dback/dx)],1)*dx
+        vp = np.sum(profd[:,ixd[i]:int(dback/dx)], 1)*dx
     except:
-        vp = np.NaN
+        vp = np.nan
     try:
-        vb = np.sum(profd[:,ixd[i]:int(idcdist0[i])],1)*dx
+        vb = np.sum(profd[:,ixd[i]:int(idcdist0[i])], 1)*dx
     except:
-        vb = np.NaN
+        vb = np.nan
 
     if iverbose:
         print("Island volumes: ", v)
         print('Platform volumes:', vp)
         print('Beach volumes:', vb)
-        print('Shapes:',np.shape(v),np.shape(vp),np.shape(vb),np.shape(zmax),np.shape(dmax))
+        print('Shapes:', np.shape(v), np.shape(vp), np.shape(vb), np.shape(zmax), np.shape(dmax))
 
     # Calculate centroids
     cxcy = np.zeros((nmaps,2))
     profc = profs.copy()
-    profc[np.where(profc<=datum)]=np.nan
-    for i in range(0,nmaps):
+    profc[np.where(profc <= datum)] = np.nan
+    for i in range(0, nmaps):
         try:
-            cxcy[i,0],cxcy[i,1] = centroid(dist,profc[i,:])
+            cxcy[i,0], cxcy[i,1] = centroid(dist,profc[i,:])
         except:
-            cxcy[i,0],cxcy[i,1] = np.nan, np.nan
+            cxcy[i,0], cxcy[i,1] = np.nan, np.nan
     if iverbose:
-        print("Centroids: \n",cxcy)
+        print("Centroids: \n", cxcy)
 
     # nice plot if requested
     if iplot:
-        fig=plt.figure(figsize=(12,8))
-        plt.plot(dist,np.ones_like(dist)*datum,'--',c='dimgray',linewidth=2)
+        fig=plt.figure(figsize=(12, 8))
+        plt.plot(dist,np.ones_like(dist)*datum, '--', c='dimgray', linewidth=2)
         for i in range(0,4):
             lab = '{0} {1: .0f} m$^3$/m'.format(pnames[i],v[i])
             plt.plot(dist,profr[i,:],'-',linewidth=3,c=cols[i+1],label=lab)
@@ -571,15 +620,16 @@ def pvol(dist,profs,pfill,psmooth,dcrest_est,dback,
             plt.plot(disl[i],datum,'<',c=cols[i])
         plt.legend()
         plt.ylim((-1., 6.))
-        plt.xlim((lp*dx,0)) # this plots xaxis backwards
+        plt.xlim((lp*dx, 0))  # this plots xaxis backwards
         plt.ylabel('Elevation (m NAVD88)')
         plt.xlabel('Across-shore Distance (m)')
         plt.title(title_str)
         if iprint:
             pfn = 'p_'+title_str+'.png'
-            plt.savefig(pfn,format='png',dpi=300)
-    return v, vp, vb, cxcy, zmax, dmax, zcrest, dcrest,\
-        zcrest0, dtoe_zc, ztoe_zc, width_island, width_platform, width_beach
+            plt.savefig(pfn, format='png', dpi=300)
+    return v, vp, vb, cxcy, zmax, dmax, zcrest, dcrest, zcrest0,\
+     dtoe_zz, ztoe_zz, dtoe_zc, ztoe_zc, dtoe_ip, ztoe_ip,\
+     width_island, width_platform, width_beach
 
 
 def running_mean(y, npts):
@@ -633,10 +683,10 @@ def running_nanmin(y, npts):
     sy = np.ones_like(y)*np.nan
     nrows = y.size - npts + 1
     n = y.strides[0]
-    y2D = np.lib.stride_tricks.as_strided(y,shape=(nrows,npts),strides=(n,n))
-    nclip = int((npts-1)/2)
+    y2D = np.lib.stride_tricks.as_strided(y, shape=(nrows, npts), strides=(n, n))
+    nclip = int((npts-1) / 2)
     # print(nclip)
-    sy[nclip:-nclip] = np.nanmin(y2D,1)
+    sy[nclip:-nclip] = np.nanmin(y2D, 1)
     return sy
 
 
@@ -655,20 +705,20 @@ def running_stddev(y, npts):
     sy = np.ones_like(y)*np.nan
     nrows = y.size - npts + 1
     n = y.strides[0]
-    y2D = np.lib.stride_tricks.as_strided(y,shape=(nrows,npts),strides=(n,n))
-    nclip = int((npts-1)/2)
+    y2D = np.lib.stride_tricks.as_strided(y, shape=(nrows, npts), strides=(n, n))
+    nclip = int((npts-1) / 2)
     # print(nclip)
-    sy[nclip:-nclip] = np.nanstd(y2D,1)
+    sy[nclip:-nclip] = np.nanstd(y2D, 1)
     return sy
 
 
-def centroid(x,z):
+def centroid(x, z):
     cz = np.nanmean(z)
-    cx = np.nansum(z*x)/np.nansum(z)
-    return(cx,cz)
+    cx = np.nansum(z * x) / np.nansum(z)
+    return(cx, cz)
 
 
-def make_grid(name=None,e0=None,n0=None,xlen=None,ylen=None,dxdy=None,theta=None):
+def make_grid(name=None, e0=None, n0=None, xlen=None, ylen=None, dxdy=None, theta=None):
     """
     Make a rectangular grid to interpolate elevations onto.
     Takes as argument array of dicts, like:
@@ -681,14 +731,14 @@ def make_grid(name=None,e0=None,n0=None,xlen=None,ylen=None,dxdy=None,theta=None
       dxdy - grid size (must be isotropic right now) [m]
       theta - rotation CCW from x-axis [deg]
     """
-    nx = int((1./dxdy)*xlen)
-    ny = int((1./dxdy)*ylen)
+    nx = int((1./dxdy) * xlen)
+    ny = int((1./dxdy) * ylen)
 
     xcoords = np.linspace(0.5*dxdy,xlen-0.5*dxdy,nx)
     ycoords = np.linspace(0.5*dxdy,ylen-0.5*dxdy,ny)
 
     # these will be the coordinates in rotated space
-    xrot, yrot = np.meshgrid(xcoords, ycoords ,sparse=False, indexing='xy')
+    xrot, yrot = np.meshgrid(xcoords, ycoords, sparse=False, indexing='xy')
 
     print('make_grid: Shape of xrot, yrot: ',np.shape(xrot),np.shape(yrot))
     shp = np.shape(xrot)
@@ -696,10 +746,10 @@ def make_grid(name=None,e0=None,n0=None,xlen=None,ylen=None,dxdy=None,theta=None
     xu=np.reshape(xu,shp)
     yu=np.reshape(yu,shp)
     # write the UTM coords of the corners to an ASCII file
-    corners = np.asarray(  [[xu[0][0],yu[0][0]],\
-                           [xu[0][-1],yu[0][-1]],\
-                           [xu[-1][-1],yu[-1][-1]],\
-                           [xu[-1][0],yu[-1][0]],\
+    corners = np.asarray(  [[xu[0][0],yu[0][0]],
+                           [xu[0][-1],yu[0][-1]],
+                           [xu[-1][-1],yu[-1][-1]],
+                           [xu[-1][0],yu[-1][0]],
                            [xu[0][0],yu[0][0]]])
 
     print('corners x, corners y]')
@@ -708,6 +758,7 @@ def make_grid(name=None,e0=None,n0=None,xlen=None,ylen=None,dxdy=None,theta=None
     print('Saving to '+fn_corners)
     np.savetxt(fn_corners, corners, delimiter=",")
     return xu, yu, xrot, yrot, xcoords, ycoords
+
 
 def box2UTMh(x, y, x0, y0, theta):
     '''
@@ -723,19 +774,19 @@ def box2UTMh(x, y, x0, y0, theta):
     c, s = np.cos(thetar), np.sin(thetar)
 
     # homogenous rotation matrix
-    Rh = np.array(((c, -s,  0.),\
-                   (s,  c,  0.),\
+    Rh = np.array(((c, -s,  0.),
+                   (s,  c,  0.),
                    (0., 0., 1.)))
     # homogenous translation matrix
-    Th = np.array(((1., 0., x0),\
-                   (0., 1., y0),\
+    Th = np.array(((1., 0., x0),
+                   (0., 1., y0),
                    (0., 0., 1.)))
 
     # homogenous input x,y
     xyh = np.vstack((x,y,np.ones_like(x)))
 
     # perform rotation and translation
-    xyrh=np.matmul(np.matmul(Th,Rh),xyh)
+    xyrh = np.matmul(np.matmul(Th,Rh), xyh)
     x_r = xyrh[0,:]
     y_r = xyrh[1,:]
     return x_r, y_r
@@ -746,8 +797,8 @@ def pcoord(x, y):
     Convert x, y to polar coordinates r, az (geographic convention)
     r,az = pcoord(x, y)
     """
-    r  = np.sqrt( x**2 + y**2 )
-    az = np.degrees( np.arctan2(x, y) )
+    r = np.sqrt(x**2 + y**2)
+    az = np.degrees(np.arctan2(x, y))
     # az[where(az<0.)[0]] += 360.
     az = (az+360.)%360.
     return r, az
@@ -768,9 +819,9 @@ def UTM2Island(eutm, nutm, eoff=378489.45785127, noff=3855740.50113774, rot=42.)
     Convert UTM NAD83 Zone 18N easting, northing to N. Core Banks alongshore, cross-shore coordinates
     xisl, yisl = UTM2Island( eutm, nutm )
     """
-    [r,az]=pcoord(eutm-eoff,nutm-noff)
-    az = az+rot
-    [xisl,yisl]=xycoord(r,az)
+    [r, az] = pcoord(eutm-eoff, nutm-noff)
+    az = az + rot
+    [xisl,yisl] = xycoord(r,az)
     return xisl, yisl
 
 
@@ -787,7 +838,7 @@ def LatLon2UTM(lat,lon,initepsg='epsg:26918'):
     return outx, outy
 
 
-def UTM2LatLon(easting,northing,initepsg='epsg:26918'):
+def UTM2LatLon(easting, northing, initepsg='epsg:26918'):
     """
     Convert UTM to lat, lon (WGS84)
     Defaults to Zone 18N
