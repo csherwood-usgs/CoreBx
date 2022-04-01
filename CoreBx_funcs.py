@@ -1,7 +1,7 @@
 # pylint: disable=C0103
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import interpolate, signal
+# from scipy import interpolate
 from scipy.stats import linregress
 from pyproj import Proj, transform
 import yaml
@@ -171,7 +171,7 @@ def calcR2(H, T, slope, igflag=0):
     # compute wavelength and Iribarren
     L = (g*T**2) / (2.*np.pi)
     sqHL = np.sqrt(H*L)
-    ir = slope/np.sqrt(H/L)
+    ir = slope/sqHL
 
     if igflag == 2:                     # use dissipative equations (IG) for ALL data
         R2 = 1.1*(0.039 * sqHL)
@@ -546,11 +546,12 @@ def pvol(dist, profs, pfill, dcrest_est, dback,
         except:
             pass
         try:
-            width_platform[i] = dback-dist[ixd[i]]
+            # this could be calculated with idcdist0 from first map, or as:
+            width_platform[i] = dback-dist[int(idcdist[i])]
         except:
             pass
         try:
-            width_beach[i] = dist[int(idcdist0[i])]-dist[ixd[i]]
+            width_beach[i] = dist[int(idcdist[i])]-dist[ixd[i]]
         except:
             pass
 
