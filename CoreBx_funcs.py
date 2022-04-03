@@ -829,7 +829,7 @@ def UTM2Island(eutm, nutm, eoff=378489.45785127, noff=3855740.50113774, rot=42.)
 def island2UTM(alongshore, across_shore, eoff=378489.45785127, noff=3855740.50113774, rot=42.):
     """Convert island coordinates to UTM
        Inverse of UTM2Island()
-       Better to use values from the dict than defaults for tranlation/rotation values
+       Better to use values from the dict than defaults for translation/rotation values
 
        Here is code for UTM2island:
           [r, az] = pcoord(eutm-eoff, nutm-noff)
