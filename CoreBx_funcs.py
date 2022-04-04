@@ -383,13 +383,13 @@ def pvol(dist, profs, pfill, dcrest_est, dback,
     # make a copy of the unchanged profiles for plotting
     profr = profs.copy()
 
-    # find first good value in smoothed profile (do this before fitting profile or filling)
+    # find first good value in profile (do this before fitting profile or filling)
     ix = np.zeros((nmaps), dtype=int)
     for i in range(0, nmaps):
         try:
-            ix[i] = int(np.argwhere(np.isfinite(psmooth[i,:]))[0])
+            ix[i] = int(np.argwhere(np.isfinite(profs[i,:]))[0])
             if iverbose:
-                print(i, ix[i], psmooth[i, ix[i]-3:ix[i]+3])
+                print(i, ix[i], profs[i, ix[i]-3:ix[i]+3])
         except:
             # fails because entire profile is NaN
             ix[i] = 0
