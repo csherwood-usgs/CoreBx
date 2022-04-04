@@ -1,0 +1,9 @@
+# Contents of a dict to define rotated island coordinates
+# This version accompanies the _refac code.
+name: ncorebx_refac # used to name output .nc file
+e0 : 378490.        # easting origin of rotated coords in UTM18N
+n0 : 3855740.       # northing orgiin of rotated coords
+xlen: 36500.        # alongshore (x) length (m)
+ylen: 1500.0        # cross-shore (y) Length (m)
+dxdy: 1.0           # grid size (m)
+theta: 42.0         # rotation (degrees CCW)
