@@ -1,13 +1,22 @@
 # pylint: disable=C0103
 import numpy as np
+import os
 import matplotlib.pyplot as plt
 # from scipy import interpolate
 from scipy.stats import linregress
 from pyproj import Proj, transform
 import yaml
 
+def which_computer():
+    computername = os.environ['COMPUTERNAME']
+    drive = 'C:/'
+    if computername == 'IGSAGIEGWSCSH10':
+        drive = 'D:/'
+    return drive, computername
+
+
 def beach_slope(dist, prof, zm=0., dx=1., npts=5):
-    """Determine whether the slope extends below zm and calculated slope over first npts
+    """Determine whether the slope extends below zm and calculate slope over first npts
 
     Returns
         zinit - Elevation of first valid point (m), even if not near zm
@@ -59,92 +68,96 @@ def beach_slope(dist, prof, zm=0., dx=1., npts=5):
     return zinit, slope
 
 
-    def extend_beach(dist, prof, zm=0., slope=0.05, dx=1., npts=5):
-        """ Find beginning of profile on seaward side
-        If that depth is > zm, extend the profile seaward with specified slope.
+def extend_beach(dist, prof, zm=0., slope=0.09, dx=1., npts=5):
+    """ Find beginning of profile on seaward side
+    If that depth is > zm, extend the profile seaward with specified slope.
 
-        dist - array of cross-shore distances
-        prof - array of cross-shore elevations (same size)
-        zm - elevation criterion: extend beach if first point is <zm
-        slope - slope of extended beach profile
-        npts - number of points to fit when extending the profile
-        """
-        ext_prof = prof.copy()
-        del_vol = 0.
+    dist - array of cross-shore distances
+    prof - array of cross-shore elevations (same size)
+    zm - elevation criterion: extend beach if first point is <zm
+    slope - slope of extended beach profile
+    npts - number of points to fit when extending the profile
+    """
+    ext_prof = prof.copy()
+    del_vol = 0.
 
-        if(np.all(np.isnan(prof))):
+    if(np.all(np.isnan(prof))):
 
-            # bail if the profile is empty
-            print('all nans in extend beach')
-            return 0, np.nan, 0., ext_prof
+        # bail if the profile is empty
+        print('all nans in extend beach')
+        return np.nan, np.nan, np.nan, 0., ext_prof
 
+    else:
+
+        # find first point with data
+        ix = int(np.argwhere(np.isfinite(prof))[0])
+        zinit = prof[ix]
+        ext_prof[0:ix]=np.nan
+        #print('ix:, zinit: ',ix, zinit)
+
+        # if first point is <zm, NaN out depths < zm
+        if(prof[ix]<zm):
+            # NaN out deeper than zm
+            icross = np.argmax(prof >= zm)
+
+            #print('icross',icross)
+            ext_prof[0:icross]=np.nan
+            #print('returning with first point')
+            return ix, icross, zinit, 0., ext_prof
+
+        # fit a line to the first five points
         else:
+            # find first five points
+            dg = dist[ix:ix+npts]
+            zg = prof[ix:ix+npts]
+            # print('zg:', zg)
 
-            # find first point with data
-            ix = int(np.argwhere(np.isfinite(prof))[0])
-            zinit = prof[ix]
-            ext_prof[0:ix]=np.nan
-            #print('ix:, zinit: ',ix, zinit)
+            # discard NaNs
+            idx = np.isfinite(dg+zg)
+            if(len(idx)<2):
+                print('too many NaNs in first npts')
+                return ix, ix, zinit, 0., ext_prof
 
-            # if first point is <zm, NaN out depths < zm
-            if(prof[ix]<zm):
-                # NaN out deeper than zm
-                icross = np.argmax(prof >= zm)
-
-                #print('icross',icross)
-                ext_prof[0:icross]=np.nan
-                #print('returning with first point')
-                return icross, zinit, 0., ext_prof
-
-            # fit a line to the first five points
             else:
-                # find first five points
-                dg = dist[ix:ix+npts]
-                zg = prof[ix:ix+npts]
-                #print('zg:', zg)
+                try:
+                    # fit line
+                    #print('dg:', dg)
+                    #print('zg:', zg)
+                    p = np.polyfit(dg[idx], zg[idx], 1)
+                    # print('p=',p[0])
 
-                # discard NaNs
-                idx = np.isfinite(dg+zg)
-                if(len(idx)<2):
-                    print('too many NaNs in first npts')
-                    return ix, zinit, 0., ext_prof
+                    # ensure slope is not too shallow
+                    if p[0] < slope:
+                        p[0] = slope
+                        # print('changed slope to ',p[0])
 
-                else:
-                    try:
-                        # fit line
-                        #print('dg:', dg)
-                        #print('zg:', zg)
-                        p = np.polyfit(dg[idx], zg[idx], 1)
-                        print('p=',p[0])
+                    # extend seaward with slope
+                    x = dist[0:ix]-dist[ix]
+                    a = prof[ix]
+                    ext_prof[0:ix] = a + slope*x
+                    # print('New profile for ix = ',ix)
+                    # print(dist[ix-2:ix+2])
+                    # print(ext_prof[ix-2:ix+2])
 
-                        # ensure slope is not too shallow
-                        if p[0] < slope:
-                            p[0] = slope
-                            print('changed slope to ',p[0])
+                    # NaN out deeper than zm
+                    icross = np.argmax(ext_prof >= zm)
 
-                        # extend seaward with slope
-                        ext_prof[0:ix] = np.polyval(p, dist[0:int(ix)])
-                        #print(ext_prof[0:ix+1])
+                    #print('icross',icross)
+                    ext_prof[0:icross]=np.nan
 
-                        # NaN out deeper than zm
-                        icross = np.argmax(ext_prof >= zm)
+                    # compute volume added to profile
+                    #print(ext_prof[icross-1:ix+1])
+                    del_vol = np.sum(ext_prof[icross:ix])*dx
+                    #print(del_vol)
+                    return ix, icross, zinit, del_vol, ext_prof
 
-                        #print('icross',icross)
-                        ext_prof[0:icross]=np.nan
-
-                        # compute volume added to profile
-                        #print(ext_prof[icross-1:ix+1])
-                        del_vol = np.sum(ext_prof[icross:ix])*dx
-                        #print(del_vol)
-                        return icross, zinit, del_vol, ext_prof
-
-                    except:
-                        # Not sure if this can ever happen
-                        print('polyval failed')
-                        return ix, np.nan, 0., ext_prof
+                except:
+                    # Not sure if this can ever happen
+                    print('polyval failed')
+                    return ix, ix, np.nan, 0., ext_prof
 
 
-        return icross, zinit, del_vol, ext_prof
+    return ix, icross, zinit, del_vol, ext_prof
 
 
 def find_toe(dist, z, s=0.05, zz=2.4, izero='offshore', debug=False):
