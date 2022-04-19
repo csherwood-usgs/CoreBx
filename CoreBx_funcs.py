@@ -68,24 +68,27 @@ def beach_slope(dist, prof, zm=0., dx=1., npts=5):
     return zinit, slope
 
 
-def extend_beach(dist, prof, zm=0., slope=0.09, dx=1., npts=5):
+def extend_beach(dist, prof, zm=0., slope=0.09, dx=1., npts=7):
     """ Find beginning of profile on seaward side
     If that depth is > zm, extend the profile seaward with specified slope.
 
     dist - array of cross-shore distances
     prof - array of cross-shore elevations (same size)
-    zm - elevation criterion: extend beach if first point is <zm
+    zm - elevation criterion: extend beach if first point is >zm
     slope - slope of extended beach profile
     npts - number of points to fit when extending the profile
+
+    return ix, icross, zinit, del_vol, bp, ext_prof
     """
     ext_prof = prof.copy()
     del_vol = 0.
+    bp = 0
 
-    if(np.all(np.isnan(prof))):
+    if np.all(np.isnan(prof)):
 
         # bail if the profile is empty
         print('all nans in extend beach')
-        return np.nan, np.nan, np.nan, 0., ext_prof
+        return np.nan, np.nan, np.nan, 0., bp, ext_prof
 
     else:
 
@@ -95,6 +98,14 @@ def extend_beach(dist, prof, zm=0., slope=0.09, dx=1., npts=5):
         ext_prof[0:ix]=np.nan
         #print('ix:, zinit: ',ix, zinit)
 
+        # if second point is less than first, and less than 1m
+        # assume first point is bad and advance one
+        bp = 0
+        while (prof[ix] >= prof[ix+1]) and (prof[ix+1] < 1.5) and (bp < 10):
+            prof[ix] = np.nan
+            ix += 1
+            bp += 1
+
         # if first point is <zm, NaN out depths < zm
         if(prof[ix]<zm):
             # NaN out deeper than zm
@@ -103,20 +114,21 @@ def extend_beach(dist, prof, zm=0., slope=0.09, dx=1., npts=5):
             #print('icross',icross)
             ext_prof[0:icross]=np.nan
             #print('returning with first point')
-            return ix, icross, zinit, 0., ext_prof
+            return ix, icross, zinit, 0., bp, ext_prof
 
-        # fit a line to the first five points
+        # fit a line to the first npts
         else:
-            # find first five points
+            # find first npts
             dg = dist[ix:ix+npts]
             zg = prof[ix:ix+npts]
             # print('zg:', zg)
 
             # discard NaNs
             idx = np.isfinite(dg+zg)
-            if(len(idx)<2):
-                print('too many NaNs in first npts')
-                return ix, ix, zinit, 0., ext_prof
+            ngood = npts - np.sum(np.isnan(dg+zg))
+            if ngood < 2:
+                print('too many NaNs in first npts',ngood, dg[idx],zg[idx])
+                return ix, ix, zinit, 0., bp, ext_prof
 
             else:
                 try:
@@ -125,7 +137,12 @@ def extend_beach(dist, prof, zm=0., slope=0.09, dx=1., npts=5):
                     #print('zg:', zg)
                     p = np.polyfit(dg[idx], zg[idx], 1)
                     # print('p=',p[0])
+                except:
+                    # Not sure if this can ever happen
+                    print('polyval failed: len, dg, zg:',ngood, dg[idx],zg[idx])
+                    return ix, ix, np.nan, 0., bp, ext_prof
 
+                try:
                     # ensure slope is not too shallow
                     if p[0] < slope:
                         p[0] = slope
@@ -149,15 +166,16 @@ def extend_beach(dist, prof, zm=0., slope=0.09, dx=1., npts=5):
                     #print(ext_prof[icross-1:ix+1])
                     del_vol = np.sum(ext_prof[icross:ix])*dx
                     #print(del_vol)
-                    return ix, icross, zinit, del_vol, ext_prof
+                    return ix, icross, zinit, del_vol, bp, ext_prof
 
                 except:
                     # Not sure if this can ever happen
-                    print('polyval failed')
-                    return ix, ix, np.nan, 0., ext_prof
+                    print('post-polyval failed: x={},a={}'.format(a,x))
+                    return ix, ix, np.nan, 0., bp, ext_prof
 
 
-    return ix, icross, zinit, del_vol, ext_prof
+
+    return ix, icross, zinit, del_vol, bp, ext_prof
 
 
 def find_toe(dist, z, s=0.05, zz=2.4, izero='offshore', debug=False):
