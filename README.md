@@ -1,9 +1,11 @@
 # CoreBx
 Code to analyze North Core Banks DEMs
 
-This has been moved to ..crs/src ../proj/CoreBx on my latptop. Not yet moved on my desktop.
+This has been moved to ..crs/src ../proj/CoreBx.
 
 December 11 2021 - Working on rebuilding laptop after new disk encryption installed. Renamed default branch from `master` to `main` and created branch `refac`, hoping to clean cobwebs out.
+
+March, 2022 - Merged `refac` back into `main`.
 
 ### Data  
 #### Original Analysis  
@@ -29,7 +31,9 @@ December 11 2021 - Working on rebuilding laptop after new disk encryption instal
 
 ### Other files
 
-`Check_centroid_calcs.ipynb` - Just a test of centroid calcs.
+`Check_centroid_calcs.ipynb` - Just a test of centroid calcs.  
+
+`Elevation_transistion_histogram` - Mostly useless joint probability plot of elevation transitions.  
 
 `NC_SeaGrant_profile.ipynb` - Code used to make profile for NC SeaGrant article. Superceded by
 
