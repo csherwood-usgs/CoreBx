@@ -1016,7 +1016,7 @@ def island2UTM(alongshore, across_shore, eoff=378489.45785127, noff=3855740.5011
     return eUTM, nUTM
 
 
-def LatLon2UTM(lat,lon,initepsg='epsg:26918'):
+def LatLon2UTM(lat,lon,init_epsg='epsg:26918'):
     """
     Convert lat lon (WGS84) to UTM.
     Defaults to Zone 18N
@@ -1024,7 +1024,7 @@ def LatLon2UTM(lat,lon,initepsg='epsg:26918'):
     TODO: Update to Proj 6 and correct this syntax
     """
     inProj = Proj(init='epsg:4326')
-    outProj = Proj(init=initepsg)
+    outProj = Proj(init=init_epsg)
     outx,outy = transform(inProj,outProj,lon,lat)
     return outx, outy
 
