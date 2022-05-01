@@ -178,6 +178,40 @@ def extend_beach(dist, prof, zm=0., slope=0.09, dx=1., npts=7):
     return ix, icross, zinit, del_vol, bp, ext_prof
 
 
+def find_first_valid(dist, prof):
+    """ Find beginning of profile on seaward side
+    If that depth is > zm, extend the profile seaward with specified slope.
+
+    dist - array of cross-shore distances
+    prof - array of cross-shore elevations (same size)
+
+    return ix, dinit, zinit, bp
+    """
+    ix = -1
+    dinit = np.nan
+    zinit = np.nan
+    bp = -1
+
+    if np.all(np.isnan(prof)):
+        # bail if the profile is empty
+        print('all nans in find_first_valid')
+        return ix, dinit, zinit, bp
+
+    else:
+        # find first point with data
+        ix = int(np.argwhere(np.isfinite(prof))[0])
+        bp = 0
+        # but skip points with reverse beach slope in first 10 points
+        while (prof[ix] >= prof[ix+1]) and (prof[ix+1] < 1.5) and (bp < 10):
+            prof[ix] = np.nan
+            ix += 1
+            bp += 1
+
+    zinit = prof[ix]
+    dinit = dist[ix]
+    return ix, dinit, zinit, bp
+
+
 def find_toe(dist, z, s=0.05, zz=2.4, izero='offshore', debug=False):
     """
     Find the toe of the dune using three algorithms:
@@ -487,323 +521,21 @@ def analyze_channels(x, diff, dx=1., vthresh=0.5):
     return nc, channel_ctr, channel_area, channel_width, channel_max_depth, channel_avg_depth
 
 
-def pvol(dist, profs, pfill, dcrest_est, dback,
-        title_str, pnames, imethod='extend',
-        dx = 1.,
-        datum=0.4,
-        maxdist=200., ztoe=2.4, ni=15, zowp=1.25, nsmooth=51,
-        iverbose=True, iplot=True, iprint=True):
+def find_dune_crest_and_back(ix, odcrest_est, dist, prof, zowp = 1.23):
     """
-    Calculate cross-sectional volumes for barrier island profiles above datum.
-    Assumes distance increases from offshore landward, but plots with ocean to right.
-
-    This is not designed to analyze datum below zero. To do that, fill values that are zeros here should
-    be reconsidered...maybe turned into datum.
-
-    Input (lp is length of profiles, nmaps is number of profiles):
-        dist(lP) - cross-shore distance (m), starting from arbitrary offshore location, equally spaced at dx
-        profs(nmaps, lp) - multiple profiles elevations (m relative to some datum)
-        pfill(lp) - single profile used to fill gaps in other profiles (pre-storm profile)
-        dcrest_est - cross-shore location of dune crest (estimated)
-        dback - cross-shore location of barrier platform (estimated as 1.25-m contour)
-        title_str - string used for title in plots
-        pnames - strings with names (dates) of profiles
-        imethod -"extend" or "clip" TODO: check clip code...that code is stale
-        dx - profile spacing (m) TODO: check to make sure dx==1 is not assumed
-        datum - elevation used as floor to calculate volumes (m) (not same as profile datum)
-        ni=15 - +/- distance to search for dune crest around estimated location (m)
-        ztoe=2.4 - elevation for estimating dune toe (m)
-        maxdist=200.
-        zowp=1.25
-        nsmooth=51,
-        iverbose - "True" produces extra output
-        iplot - "True" produces plot
-        iprint - "True" saves plot
-
-    Returns:
-        v - volume of profile between first datum and back of island (m2)
-        vp - volume of profile between first datum and back of platform (m2)
-        vb - volume of beach portion of the profile (beyond dcrest[0])
-        cxcy - x,y pair with centriod location (cross-shore, elevation) (m, m) [misnamed: should be cxcz]
-        zmax - highest point in the profile (m)
-        dmax - profile distance to highest point (m)
-        zcrest - elevation of highest point near digitized dune line (m)
-        dcrest - profile distance to zcrest (m)
-        zcrest0 - elevation at same loction as dcrest[0] (m)
-        dtoe - profile distance to first elevation >= ztoe (m)
-        width_island - distance from first point above datum to back of island (m)
-        width_platform - distance from first point above datum to dback (m)
-        width_beach - distance from first point above datum to dcrest0 (m)
-
     """
-    # Colors from colorbrewer...but one more than needed so we can skip the first one (too light)
-    cols = ['#feedde', '#fdbe85', '#fd8d3c', '#e6550d', '#a63603']
-
-    nmaps, lp = np.shape(profs)
-    if iverbose:
-        print('dx: ', dx)
-        print("nmaps, length profiles: ", nmaps, lp)
-        print("Shape of dist: ", np.shape(dist))
-        print("Shape of profs: ", np.shape(profs))
-        print("Shape of pfill: ", np.shape(pfill))
-    if(iverbose and iplot):
-        plt.figure(figsize=(12, 8))
-        plt.plot(dist, pfill, ':r')
-        for i in range(0, nmaps):
-            plt.plot(dist, profs[i, :], '-')
-
-    # make a copy of the unchanged profiles for plotting
-    profr = profs.copy()
-
-    # find first good value in profile (do this before fitting profile or filling)
-    ix = np.zeros((nmaps), dtype=int)
-    for i in range(0, nmaps):
-        try:
-            ix[i] = int(np.argwhere(np.isfinite(profs[i,:]))[0])
-            if iverbose:
-                print(i, ix[i], profs[i, ix[i]-3:ix[i]+3])
-        except:
-            # fails because entire profile is NaN
-            ix[i] = 0
-
-    # extend the profiles with linear fit or zeros
-    if imethod == 'extend':
-        title_str = title_str+'_extended'
-        if iverbose:
-            print('extend')
-        npts = int(5/dx)
-        # fit a straight line to first 5 points
-        for i in range((nmaps)):
-            try:
-                # Not sure why one of these breaks down in
-                p = np.polyfit( dist[int(ix[i]+1):int(ix[i]+1+npts)],
-                        profs[i, int(ix[i]+1):int(ix[i]+1+npts)], 1)
-                if iverbose:
-                    print("Slope is: {:.4f}".format(p[0]))
-                # if slope is less than 1:50, replace
-                if p[0] > 0.02:
-                    # if slope is positive, replace NaNs with line
-                    profs[i, 0:int(ix[i])] = np.polyval(p, dist[0:int(ix[i])])
-                else:
-                    # if slope is not positive, replace NaNs with zeros
-                    profs[i, 0:int(ix[i])] = 0.
-                    # print("warning: replacing slope of {:.4f} with {:.4f}".format(p[0],0.02))
-                    # p[0]=0.02
-                    # profs[i,0:int(ix[i])]=np.polyval(p,dist[0:int(ix[i])])
-            except:
-                if iverbose:
-                    print('cant calculate slope')
-                    print('dist, profs', dist[int(ix[i]+1):int(ix[i]+1+npts)],
-                            profs[i, int(ix[i]+1):int(ix[i]+1+npts)])
-                # fill with zeros
-                profs[i, 0:int(ix[i])] = 0.
-    elif imethod == 'clip':
-        # truncate the profiles to start at common point (profile w/ least data)
-        title_str = title_str + '_clip'
-        if iverbose:
-            print('clipped')
-        imx = int(np.max(ix))
-        profs[:, 0:imx] = 0.
-
-    # determine first point >= datum (do this after fitting profile)
-    ixd = np.zeros((nmaps), dtype=int)
-
-    for i in range(0, nmaps):
-        try:
-            ixd[i] = int(np.argwhere((profs[i,:]>=datum))[0])
-            if iverbose:
-                print(i, ix[i], profs[i,ixd[i]-3:ixd[i]+3])
-        except:
-            # fails because entire profile is NaN
-            ixd[i] = 0
-
-    # replace NaNs with fill values from September
-    for i in range((nmaps)):
-        # replace NaNs the fill values
-        idx = np.isnan(profs[i,:])
-        profs[i,idx]=pfill[idx]
-
-    # replace any other NaNs with zero
-    for i in range(0, nmaps):
-        profs[i,np.isnan(profs[i,:])]=0.
-
     # find the back of the island using zowp
-    iisl = np.zeros((nmaps), dtype=int)
-    disl = np.ones((nmaps))*np.nan
-    for i in range((nmaps)):
-        try:
-            # find last point >= zowp
-            #iisl = np.squeeze(np.where(profs[i,int(ix[i]):int(ix[i]+maxdist)]>=datum))[-1]
-            iisl[i] = np.squeeze(np.where(profs[i,int(ix[i]):-1] >= zowp))[-1]
-            disl[i] = dist[int(ix[i] + iisl[i])]
-        except:
-            pass
-        if iverbose:
-            print("iisl, disl", iisl[i], disl[i])
-
-    # find the highest point in the profile
-    zmax = np.ones((nmaps))*np.nan
-    dmax = np.ones((nmaps))*np.nan
-    for i in range((nmaps)):
-        try:
-            imxh = int (np.nanargmax(profs[i,:]))
-            zmax[i] = profs[i,imxh]
-            dmax[i] = dist[imxh]
-        except:
-            pass
-        if iverbose:
-            print("i, zmax, dmax",i, zmax[i], dmax[i])
+    # find last point >= zowp
+    iisl = np.squeeze(np.where(prof[int(ix):-1] >= zowp))[-1]
+    dback = dist[int(iisl)]
 
     # find highest point within ni meters of estimated dune crest
-    idc = np.ones((nmaps), dtype=int)
-    zcrest0 = np.ones((nmaps))*np.nan
-    zcrest = np.ones((nmaps))*np.nan
-    dcrest = np.ones((nmaps))*np.nan
-    idcdist = np.ones((nmaps))*np.nan
-    idcdist0 = np.ones((nmaps))*np.nan
-    if np.isfinite(dcrest_est) and dcrest_est >= 0:
-        idcrest = int(max(dcrest_est/dx, 0.))
+    if np.isfinite(idcrest_est) and idcrest_est >= 0:
+        idcrest = int(max(dcrest_est, 0.))
         idcrest_min = int(max(idcrest-ni, 0))
         idcrest_max = int(min(idcrest+ni, lp))
-        if iverbose:
-            print('dcrest_est, idcrest: ',dcrest_est, idcrest)
-        for i in range((nmaps)):
-            try:
-                idc[i] = int(np.nanargmax( profs[i,idcrest_min:idcrest_max]))
-                zcrest[i] = profs[i,idc[i]+idcrest-ni]
-                zcrest0[i] = profs[i,idc[0]+idcrest-ni]  # z at location os zmax in first map
-                dcrest[i] = dist[idc[i]+idcrest-ni]
-                idcdist[i] = int(idc[i]+idcrest-ni)  # index to dune crest on current map
-                idcdist0[i] = int(idc[0]+idcrest-ni)  # index to dune crest on first mat
-            except:
-                if iverbose:
-                    print("passing z calcs")
 
-            if iverbose:
-                print("idc, idcdist0, zcrest, zcrest0, dcrest:", idc[i], idcdist0[i], zcrest[i], zcrest0[i], dcrest[i])
-
-    # find the dune toe three diff. ways
-    izz = np.zeros((nmaps), dtype=int)
-    ztoe_zz = np.ones((nmaps))*np.nan
-    dtoe_zz = np.ones((nmaps))*np.nan
-    izc = np.zeros((nmaps), dtype=int)
-    ztoe_zc = np.ones((nmaps))*np.nan
-    dtoe_zc = np.ones((nmaps))*np.nan
-    iip = np.zeros((nmaps), dtype=int)
-    ztoe_ip = np.ones((nmaps))*np.nan
-    dtoe_ip = np.ones((nmaps))*np.nan
-
-    for i in range(((nmaps))):
-        izz[i],izc[i],iip[i],ztoe_zz[i],ztoe_zc[i],ztoe_ip[i] = \
-            find_toe(dist[int(ix[i]):int(ix[i]+maxdist)], np.squeeze(profs[i,int(ix[i]):int(ix[i]+maxdist)]),
-                s=0.05, zz=ztoe, izero='offshore')
-        dtoe_zz[i] = dist[int(ix[i] + izz[i])]
-        dtoe_zc[i] = dist[int(ix[i] + izc[i])]
-        dtoe_ip[i] = dist[int(ix[i] + iip[i])]
-    if iverbose:
-        print('dtoe_zz:',dtoe_zz)
-        print('dtoe_zc:',dtoe_zc)
-        print('dtoe_ip:',dtoe_ip)
-        print('ztoe_zz:',ztoe_zz)
-        print('ztoe_zc:',ztoe_zc)
-        print('ztoe_ip:',ztoe_ip)
-
-    # calculate total width of Island
-    width_island = np.zeros((nmaps))*np.nan
-    width_platform = np.zeros((nmaps))*np.nan
-    width_beach = np.zeros((nmaps))*np.nan
-    for i in range((nmaps)):
-        try:
-            width_island[i] = disl[i]-dist[ixd[i]]
-        except:
-            pass
-        try:
-            # this could be calculated with idcdist0 from first map, or as:
-            width_platform[i] = dback-dist[int(idcdist[i])]
-        except:
-            pass
-        try:
-            width_beach[i] = dist[int(idcdist[i])]-dist[ixd[i]]
-        except:
-            pass
-
-        if iverbose:
-            print("width, platform width",width_island[i], width_platform[i], width_beach[i])
-
-    # Calculate volumes
-    profd = profs.copy()-datum
-    profd[np.where(profd <= 0.)] = 0.
-    try:
-        v = np.sum(profd, 1)*dx
-    except:
-        v = np.nan
-    try:
-        vp = np.sum(profd[:,ixd[i]:int(dback/dx)], 1)*dx
-    except:
-        vp = np.nan
-    try:
-        vb = np.sum(profd[:,ixd[i]:int(idcdist0[i])], 1)*dx
-    except:
-        vb = np.nan
-
-    if iverbose:
-        print("Island volumes: ", v)
-        print('Platform volumes:', vp)
-        print('Beach volumes:', vb)
-        print('Shapes:', np.shape(v), np.shape(vp), np.shape(vb), np.shape(zmax), np.shape(dmax))
-
-    # Calculate centroids
-    cxcy = np.zeros((nmaps,2))
-    profc = profs.copy()
-    profc[np.where(profc <= datum)] = np.nan
-    for i in range(0, nmaps):
-        try:
-            cxcy[i,0], cxcy[i,1] = centroid(dist,profc[i,:])
-        except:
-            cxcy[i,0], cxcy[i,1] = np.nan, np.nan
-    if iverbose:
-        print("Centroids: \n", cxcy)
-
-    # nice plot if requested
-    if iplot:
-        fig=plt.figure(figsize=(12, 8))
-        plt.plot(dist,np.ones_like(dist)*datum, '--', c='dimgray', linewidth=2)
-        for i in range(0,4):
-            lab = '{0} {1: .0f} m$^3$/m'.format(pnames[i],v[i])
-            plt.plot(dist,profr[i,:],'-',linewidth=3,c=cols[i+1],label=lab)
-            plt.plot(dist,profs[i,:],':',linewidth=3,c=cols[i+1])
-        for i in range(0,4):
-            plt.plot(cxcy[i,0],cxcy[i,1],'ok',ms=12)
-            plt.plot(cxcy[i,0],cxcy[i,1],'o',c=cols[i])
-        for i in range(0,4):
-            plt.plot(dmax[i],zmax[i],'or',ms=12)
-            plt.plot(dmax[i],zmax[i],'o',c=cols[i])
-        for i in range(0,4):
-            plt.plot(dtoe_zc[i],ztoe_zc[i],'ob',ms=12)
-            plt.plot(dtoe_zc[i],ztoe_zc[i],'o',c=cols[i])
-        for i in range(0,4):
-            plt.plot(dist[ixd[i]],datum,'vr',ms=12)
-            plt.plot(dist[ixd[i]],datum,'v',c=cols[i])
-        for i in range(0,4):
-            plt.plot(dcrest[i],zcrest[i],'^r',ms=12)
-            plt.plot(dcrest[i],zcrest[i],'^',c=cols[i])
-        plt.plot(dback,zowp,'vr',ms=12)
-        for i in range(0,4):
-            plt.plot(disl[i],datum,'<y',ms=12)
-            plt.plot(disl[i],datum,'<',c=cols[i])
-        plt.legend()
-        plt.ylim((-1., 6.))
-        plt.xlim((lp*dx, 0))  # this plots xaxis backwards
-        plt.ylabel('Elevation (m NAVD88)')
-        plt.xlabel('Across-shore Distance (m)')
-        plt.title(title_str)
-        if iprint:
-            pfn = 'p_'+title_str+'.png'
-            plt.savefig(pfn, format='png', dpi=300)
-    return v, vp, vb, cxcy, zmax, dmax, zcrest, dcrest, zcrest0,\
-     dtoe_zz, ztoe_zz, dtoe_zc, ztoe_zc, dtoe_ip, ztoe_ip,\
-     width_island, width_platform, width_beach
-
+        idc = int(np.nanargmax( prof[i,idcrest_min:idcrest_max]))
 
 def running_mean(y, npts):
     '''
