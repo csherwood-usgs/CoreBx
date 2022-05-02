@@ -178,38 +178,110 @@ def extend_beach(dist, prof, zm=0., slope=0.09, dx=1., npts=7):
     return ix, icross, zinit, del_vol, bp, ext_prof
 
 
-def find_first_valid(dist, prof):
+def find_first_valid(dist, prof, pno):
     """ Find beginning of profile on seaward side
-    If that depth is > zm, extend the profile seaward with specified slope.
 
     dist - array of cross-shore distances
     prof - array of cross-shore elevations (same size)
+    pno - profile number
 
-    return ix, dinit, zinit, bp
+    return isy, zshore, bp
     """
-    ix = -1
-    dinit = np.nan
-    zinit = np.nan
+    isy = -1
+    zshore = np.nan
     bp = -1
 
     if np.all(np.isnan(prof)):
         # bail if the profile is empty
-        print('all nans in find_first_valid')
-        return ix, dinit, zinit, bp
+        print(pno,'all nans in find_island_points')
+        return isy, zshore, bp
 
     else:
         # find first point with data
-        ix = int(np.argwhere(np.isfinite(prof))[0])
+        isy = int(np.argwhere(np.isfinite(prof))[0])
         bp = 0
         # but skip points with reverse beach slope in first 10 points
-        while (prof[ix] >= prof[ix+1]) and (prof[ix+1] < 1.5) and (bp < 10):
-            prof[ix] = np.nan
-            ix += 1
+        while (prof[isy] >= prof[isy+1]) and (prof[isy+1] < 1.5) and (bp < 10):
+            prof[isy] = np.nan
+            isy += 1
             bp += 1
 
-    zinit = prof[ix]
-    dinit = dist[ix]
-    return ix, dinit, zinit, bp
+        zshore = prof[isy]
+    return isy, zshore, bp
+
+
+def find_dune(dist, prof, isy, idy_guess, pno, zb=.5, ni=10):
+    """ Find dune crest and island dback
+    Should be run on smoothed arrays
+
+    dist - array of cross-shore distances
+    prof - array of cross-shore elevations (same size)
+    isy - first valid point
+    idy_guess - guess at dune crest location
+    pno = profile number
+    zb = elevation criterion for island back
+    ni = number of grid cells around idy_guess to search for dune crest
+
+    return idy, zdune, iby, zback, bp
+    """
+    idy= idy_guess
+    zdune = -99.9
+
+    if np.all(np.isnan(prof)):
+        # bail if the profile is empty
+        print(pno,'all nans in find_dune_and_back')
+        return idy, zdune
+    else:
+        # find highest point within ni grid points of estimated dune crest
+        if np.isfinite(idy_guess) and idy_guess >= isy:
+            idcrest = int(max(idy_guess, isy))
+            idcrest_min = int(max(idcrest-ni, 0))
+            idcrest_max = int(min(idcrest+ni, len(prof)-1))
+            try:
+                idy = int(np.nanargmax( prof[idcrest_min:idcrest_max]))+idcrest
+                zdune = prof[idy]
+            except:
+                #print(pno,np.sum(np.isnan(prof[idcrest_min:idcrest_max])))
+                idy = idy_guess
+                zdune = -99.9
+        else:
+            idy = idy_guess
+            zdune = -99.9
+
+    return idy, zdune
+
+
+def find_back(dist, prof, idy, pno, zb=.75):
+    """ Find island dback
+    Should be run on super-smoothed arrays
+
+    dist - array of cross-shore distances
+    prof - array of cross-shore elevations (same size)
+    idy - dune crest
+    pno = profile number
+    zb = elevation criterion for island back
+
+    return iby, zback
+    """
+    iby = -1
+    zback = -99.9
+
+    if np.all(np.isnan(prof)):
+        # bail if the profile is empty
+        print(pno,'all nans in find_dune_and_back')
+        bp = 1
+        return iby, zback
+    else:
+        # find back side
+        try:
+            iby = np.argwhere(prof[int(idy):-1] >= zb)[-1]
+            zback = prof[int(iby)]
+        except:
+            print(pno,'error idy, iby=',idy, iby)
+            iby = idy
+            zback = -99.9
+
+    return iby, zback
 
 
 def find_toe(dist, z, s=0.05, zz=2.4, izero='offshore', debug=False):
