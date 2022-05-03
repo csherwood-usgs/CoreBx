@@ -277,6 +277,7 @@ def find_back(dist, prof, idy, pno, zb=.75):
             iby = np.argwhere(prof[int(idy):-1] >= zb)[-1]
             zback = prof[int(iby)]
         except:
+
             print(pno,'error idy, iby=',idy, iby)
             iby = idy
             zback = -99.9
