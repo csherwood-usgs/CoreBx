@@ -222,7 +222,7 @@ def find_dune(dist, prof, isy, idy_guess, pno, zb=.5, ni=10):
     zb = elevation criterion for island back
     ni = number of grid cells around idy_guess to search for dune crest
 
-    return idy, zdune, iby, zback, bp
+    return idy, zdune
     """
     idy= idy_guess
     zdune = -99.9
