@@ -210,7 +210,7 @@ def find_first_valid(dist, prof, pno):
     return isy, zshore, bp
 
 
-def find_dune(dist, prof, isy, idy_guess, pno, zb=.5, ni=10):
+def find_dune(dist, prof, isy, idy_guess, pno, zb=.5, ni=20):
     """ Find dune crest and island dback
     Should be run on smoothed arrays
 
@@ -238,8 +238,10 @@ def find_dune(dist, prof, isy, idy_guess, pno, zb=.5, ni=10):
             idcrest_min = int(max(idcrest-ni, 0))
             idcrest_max = int(min(idcrest+ni, len(prof)-1))
             try:
-                idy = int(np.nanargmax( prof[idcrest_min:idcrest_max]))+idcrest
+                idy = int(np.argmax( prof[idcrest_min:idcrest_max]))+idcrest
                 zdune = prof[idy]
+                if(pno==12500):
+                    print(idcrest_min, idcrest_max, idcrest, idy)
             except:
                 #print(pno,np.sum(np.isnan(prof[idcrest_min:idcrest_max])))
                 idy = idy_guess
@@ -247,6 +249,10 @@ def find_dune(dist, prof, isy, idy_guess, pno, zb=.5, ni=10):
         else:
             idy = idy_guess
             zdune = -99.9
+
+        if(pno == 12500):
+            plt.plot(dist,prof)
+            plt.plot(idy,zdune,'ok')
 
     return idy, zdune
 
