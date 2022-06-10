@@ -211,7 +211,7 @@ def find_first_valid(dist, prof, pno):
 
 
 def find_dune(dist, prof, isy, idy_guess, pno, zb=.5, ni=20):
-    """ Find dune crest and island dback
+    """ Find dune crest
     Should be run on smoothed arrays
 
     dist - array of cross-shore distances
@@ -229,7 +229,7 @@ def find_dune(dist, prof, isy, idy_guess, pno, zb=.5, ni=20):
 
     if np.all(np.isnan(prof)):
         # bail if the profile is empty
-        print(pno,'all nans in find_dune_and_back')
+        print(pno,'all nans in find_dune')
         return idy, zdune
     else:
         # find highest point within ni grid points of estimated dune crest
@@ -238,7 +238,7 @@ def find_dune(dist, prof, isy, idy_guess, pno, zb=.5, ni=20):
             idcrest_min = int(max(idcrest-ni, 0))
             idcrest_max = int(min(idcrest+ni, len(prof)-1))
             try:
-                idy = int(np.argmax( prof[idcrest_min:idcrest_max]))+idcrest
+                idy = int(np.argmax( prof[idcrest_min:idcrest_max]))+idcrest_min
                 zdune = prof[idy]
                 if(pno==12500):
                     print(idcrest_min, idcrest_max, idcrest, idy)
