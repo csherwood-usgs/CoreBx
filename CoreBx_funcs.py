@@ -210,6 +210,41 @@ def find_first_valid(dist, prof, pno):
     return isy, zshore, bp
 
 
+def find_first_above(dist, prof, pno, zlev=0.4):
+    """ Find first value at or above zlev
+
+    dist - array of cross-shore distances
+    prof - array of cross-shore elevations (same size)
+    pno - profile number
+    zlev - 
+
+    return isy, zshore, bp
+    """
+    isy = -1
+    zshore = np.nan
+    bp = -1
+
+    if np.all(np.isnan(prof)):
+        # bail if the profile is empty
+        print(pno,'all nans in find_first_above')
+        return isy, zshore, bp
+
+    else:
+        # find first point with data
+        if (np.any(prof>=zlev)):
+            isy = int(np.argwhere(prof>=zlev)[0])
+            bp = 0
+            # but skip points with reverse beach slope in first 10 points
+            while (prof[isy] >= prof[isy+1]) and (prof[isy+1] < 1.5) and (bp < 10):
+                prof[isy] = np.nan
+                isy += 1
+                bp += 1
+
+        zshore = prof[isy]
+
+    return isy, zshore, bp
+
+
 def find_dune(dist, prof, isy, idy_guess, pno, zb=.5, ni=20):
     """ Find dune crest
     Should be run on smoothed arrays
