@@ -326,6 +326,15 @@ def find_back(dist, prof, idy, pno, zb=.75):
     return iby, zback
 
 
+def fill_nans(a, fill_val = 0.):
+    map_shape = np.shape(a)
+    print('Map shape:', map_shape)
+    ar = np.ravel(a)
+    ireplace = np.argwhere(np.isnan(ar))
+    print('Replacing:',len(ireplace))
+    ar[ireplace] = fill_val
+
+
 def find_toe(dist, z, s=0.05, zz=2.4, izero='offshore', debug=False):
     """
     Find the toe of the dune using three algorithms:
