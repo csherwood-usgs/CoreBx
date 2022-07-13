@@ -5,9 +5,21 @@ This has been moved to ..crs/src ../proj/CoreBx.
 
 December 11 2021 - Working on rebuilding laptop after new disk encryption installed. Renamed default branch from `master` to `main` and created branch `refac`, hoping to clean cobwebs out.
 
-March, 2022 - Merged `refac` back into `main`.
+March, 2022 - Merged `refac` back into `main`.  
 
-### Data  
+July, 2022 - Finalizing calcs
+
+### Data
+
+### July analysis
+`CoreBx_island.ipynb` - Convert DSM tifs to rotated island coordinates.  
+
+    input:  
+* `small_ilsnad_box.yml` - coordinates for extent and location
+* various tiff files  
+
+
+`Core
 #### Original Analysis  
 
 
