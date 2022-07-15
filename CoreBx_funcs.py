@@ -15,6 +15,38 @@ def which_computer():
     return drive, computername
 
 
+def replace_nans_with_x(map, x, isy, iyback):
+    '''Replace nans between beach and back with x'''
+    mapx = np.copy(map)
+    (nacross, nalong) = np.shape(mapx)
+    # arrays for statistics
+    sum_prof = np.zeros(nalong)
+    sum_repl = np.zeros(nalong)
+
+    for i in range(nalong):
+        # cross-island indices of beach, island back
+        ibeach = int(isy[i])     # beach varies with survey
+        ibck = int(iyback[i])      # yback is constant
+        
+        # replace nans with x
+        tmp_prof = np.squeeze(map[:,i])
+        ireplace = np.argwhere(np.isnan(tmp_prof))
+        ireplace = ireplace[ np.where( ireplace >= ibeach) ]
+        ireplace = ireplace[ np.where( ireplace <= ibck)]
+        sum_prof[i] = (ibck-ibeach)
+        sum_repl[i] = len(ireplace)
+        tmp_prof[ireplace] = x
+        mapx[:,i]=tmp_prof
+            
+    print('Sum points:', np.nansum(sum_prof))
+    print('Sum replaced:', np.nansum(sum_repl))
+    print('Fraction replaced:', np.nansum(sum_repl)/np.nansum(sum_prof))
+    print('Median number replaced', np.nanmedian(sum_repl))
+    print('Max. number replaced', np.nanmax(sum_repl))
+    print('Median fraction replaced', np.nanmedian(sum_repl/sum_prof))
+    return mapx
+
+
 def beach_slope(dist, prof, zm=0., dx=1., npts=5):
     """Determine whether the slope extends below zm and calculate slope over first npts
 

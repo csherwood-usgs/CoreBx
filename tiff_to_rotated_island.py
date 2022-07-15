@@ -56,7 +56,7 @@ def tiff_to_rotated_island_nc(yml_fname, tiff_fname, nc_fname):
 
     # this is a slow iteration through all of the points, but allows us to skip ones that are outside
     except:
-        print('Could not to fast interpolation.')
+        print('Could not do fast interpolation.')
 
     return None
 
@@ -66,10 +66,16 @@ if __name__ == '__main__':
     yml_fname = 'small_island_box.yml'
     drv = 'D:'
     tiff_path = drv+r'\\crs\\proj\\2019_DorianOBX\\Best_files\\dems\\'
-    tiff_fname = tiff_path+'NCB_Sep_EBK_2022-07-13_cog_enclose.tif'
+    # tiff_fname = tiff_path+'NCB_Sep_EBK_2022-07-13_cog_enclose.tif'
+    # tiff_fname = tiff_path+'NCB_Oct_EBK_SfM_lidar_mosiac_cog.tif'
+    tiff_fname = tiff_path+'NCB_Nov_EBK_mosaic_cog2.tif'
+
     # output folder for rotated DEMs
     nc_path =drv+r'\\crs\\proj\\2019_DorianOBX\\Dorian_paper_analyses\\rotated_dems\\'
-    nc_fname = nc_path+'ncorebx_small_NCB_Sep_EBK_2022-07-13_rotated.nc'
+    # nc_fname = nc_path+'ncorebx_small_NCB_Sep_EBK_2022-07-13_rotated.nc'
+    # nc_fname = nc_path+'ncorebx_small_NCB_Oct_EBK_SfM_lidar_mosiac_cog_rotated.nc'
+    nc_fname = nc_path+'ncorebx_small_NCB_Nov_EBK_mosaic_cog.tif'
+
     if(os.path.isfile(tiff_fname)):
         tiff_to_rotated_island_nc(yml_fname, tiff_fname, nc_fname)
     else:
