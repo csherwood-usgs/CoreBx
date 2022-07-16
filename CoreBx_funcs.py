@@ -16,7 +16,7 @@ def which_computer():
 
 
 def replace_nans_with_x(map, x, isy, iyback):
-    '''Replace nans between beach and back with x'''
+    '''Replace nans in 2D map between beach and back with x'''
     mapx = np.copy(map)
     (nacross, nalong) = np.shape(mapx)
     # arrays for statistics
