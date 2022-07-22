@@ -557,10 +557,10 @@ def calcR2(H, T, slope, igflag=0):
 
 def nanlsfit(x, y):
     """least-squares fit of data with NaNs"""
-    ok = ~np.isnan(x) & ~np.isnan(y)
-    n = len(ok(bool(ok)))
+    ok = ~np.isnan(x+y)
     xx = x[ok]
     yy = y[ok]
+    n = len(xx)
     slope, intercept, r, p, stderr = linregress(xx, yy)
     print("n={}; slope, intercept= {:.4f},{:.4f}; r={:.4f} p={:.4f}, stderr={:.4f} ".format(n, slope, intercept, r, p, stderr))
     return n, slope, intercept, r, p, stderr
