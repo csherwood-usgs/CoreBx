@@ -874,7 +874,7 @@ def xycoord(r, az):
     return x, y
 
 
-def UTM2Island(eutm, nutm, eoff=378489.45785127, noff=3855740.50113774, rot=42.):
+def UTM2Island(eutm, nutm, eoff, noff, rot):
     """
     Convert UTM NAD83 Zone 18N easting, northing to N. Core Banks alongshore, cross-shore coordinates
     xisl, yisl = UTM2Island( eutm, nutm )
