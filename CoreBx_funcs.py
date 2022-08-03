@@ -874,10 +874,12 @@ def xycoord(r, az):
     return x, y
 
 
-def UTM2Island(eutm, nutm, eoff, noff, rot):
+def UTM2Island(eutm, nutm, eoff=383520.0, noff=3860830.0, rot=42.0):
     """
     Convert UTM NAD83 Zone 18N easting, northing to N. Core Banks alongshore, cross-shore coordinates
     xisl, yisl = UTM2Island( eutm, nutm )
+    Better to use values from the dict than defaults for translation/rotation values
+    Defaults are associated with the dict read in from `small_island_box.yml`
     """
     [r, az] = pcoord(eutm-eoff, nutm-noff)
     az = az + rot
@@ -885,10 +887,11 @@ def UTM2Island(eutm, nutm, eoff, noff, rot):
     return xisl, yisl
 
 
-def island2UTM(alongshore, across_shore, eoff=378489.45785127, noff=3855740.50113774, rot=42.):
+def island2UTM(alongshore, across_shore, eoff=383520.0, noff=3860830.0, rot=42.):
     """Convert island coordinates to UTM
        Inverse of UTM2Island()
        Better to use values from the dict than defaults for translation/rotation values
+       Defaults are associated with the dict read in from `small_island_box.yml`
 
        Here is code for UTM2island:
           [r, az] = pcoord(eutm-eoff, nutm-noff)
