@@ -608,20 +608,24 @@ def stat_summary(x, iprint=False):
 
     return s
 
-def analyze_channels(x, diff, dx=1., vthresh=0.5):
+def analyze_channels(x, diff, dx=1., npts = 5, vthresh=0.5, hthresh = 10.):
     """
     Calculate channel data from alongshore difference vector
 
     Input:
         x - vector of alongshore locations
-        diff - vector of alongshore elevations (m)
+        diff - vector of alongshore elevation differences (m)
         dx - spacing of points in diff (m)
-        vthres - vertical threshold for channel id (m)
+        vthresh - vertical threshold for channel id (m)
         hthresh - horizonal threshold (width) for channel id (m)
 
         Assumes diff is postive
 
     """
+    # smooth
+    diff = running_nanmean(diff, npts)
+    # remove NaNs
+    diff[ ~np.isfinite(ch_diff)] = 0.
     # sumple calculation of channel area
     diff[diff <= vthresh] = 0.
     chana = np.cumsum(diff)*dx
@@ -673,6 +677,17 @@ def analyze_channels(x, diff, dx=1., vthresh=0.5):
                 run = False
 
     channel_ctr = channel_strt + 0.5*channel_width
+
+    # throw out narrow channels
+    iswide = np.argwhere( channel_width > hthresh )
+    nc = len(iswide)
+    # I don't know how these got dimensions of [n,1], but squeeze them down.
+    channel_ctr = np.squeeze( channel_ctr[iswide] )
+    channel_width = np.squeeze( channel_width[iswide] )
+    channel_area = np.squeeze( channel_area[iswide] )
+    channel_max_depth = np.squeeze( channel_max_depth[iswide] )
+    channel_avg_depth = np.squeeze( channel_avg_depth[iswide] )
+
     return nc, channel_ctr, channel_area, channel_width, channel_max_depth, channel_avg_depth
 
 
